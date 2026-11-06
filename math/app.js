@@ -1078,7 +1078,7 @@ function finishTest(why) {
   }
   h += `<div class="acts"><button class="btn green" onclick="go('test')">再测一次</button><button class="btn ghost" onclick="go('map')">回到首页</button></div></div>`
   $app.innerHTML = h; window.scrollTo(0, 0)
-  if (g.score >= 100) { SFX.win(); setTimeout(() => fireworks('无敌的薇薇', '小测验满分 100 分！'), 300) }
+  if (g.score >= 100) { Music.stop(); setTimeout(() => thunderShow('无敌的薇薇', '⚡ 雷光一闪 · 小测验满分 100 分！', () => { if (S.music) Music.play('calm'); confetti(120) }), 300) }
   else if (g.score >= 90) { SFX.win(); confetti(110) }
   else if (g.score >= 60) { SFX.win(); confetti(50) }
   else SFX.lose()
@@ -1152,6 +1152,110 @@ function openChest() {
 }
 
 // ---------------- 满分烟花 ----------------
+// ---------------- 测验满分大招：原创 10 秒「雷光一闪」动画（程序画的，不用视频文件） ----------------
+function thunderShow(title, sub, done) {
+  const wrap = document.createElement('div'); wrap.className = 'fw thunder'
+  wrap.innerHTML = `<canvas></canvas><div class="th-cap" id="thCap"></div><div class="th-text" id="thText"><b>${esc(title)}</b><small>${esc(sub || '')}</small><small class="fw-date">${dateCN()} ${timeStr()}</small></div><div class="fw-tip" id="thTip" style="opacity:0">点一下继续</div>`
+  document.body.appendChild(wrap)
+  const cv = wrap.querySelector('canvas'), ctx = cv.getContext('2d'), cap = wrap.querySelector('#thCap')
+  const dpr = Math.min(2, window.devicePixelRatio || 1), W = innerWidth, H = innerHeight
+  cv.width = W * dpr; cv.height = H * dpr; ctx.scale(dpr, dpr)
+  const t0 = performance.now(), cy = H * 0.42, U = Math.min(W, H)
+  const bolts = [], sparks = [], rain = Array.from({ length: 90 }, () => ({ x: Math.random() * W, y: Math.random() * H, v: 9 + Math.random() * 8 }))
+  let closed = false, flash = 0, shakeT = 0, fired = {}
+  // 闪电：中点随机偏移
+  function zig(x1, y1, x2, y2, d) {
+    if (d < 6) return [[x1, y1], [x2, y2]]
+    const mx = (x1 + x2) / 2 + (Math.random() - 0.5) * d, my = (y1 + y2) / 2 + (Math.random() - 0.5) * d
+    return zig(x1, y1, mx, my, d / 2).concat(zig(mx, my, x2, y2, d / 2).slice(1))
+  }
+  const addBolt = (x1, y1, x2, y2, w = 1, life = 500) => bolts.push({ p: zig(x1, y1, x2, y2, Math.hypot(x2 - x1, y2 - y1) * 0.25), w, born: performance.now(), life })
+  const crack = (big) => { noise(0, 0.12, 0.9, 2600); noise(0.02, big ? 1.6 : 0.5, big ? 0.9 : 0.5, big ? 70 : 260); tone(big ? 55 : 90, 0, big ? 1.2 : 0.4, 'sawtooth', big ? 0.12 : 0.06) }
+  const at = (ms, f) => { if (!fired[ms] && performance.now() - t0 >= ms) { fired[ms] = 1; f() } }
+  // 冲刺路线：在屏幕上来回折线冲 6 次
+  const dashPts = [[W * 0.12, cy + U * 0.1]]
+  for (let i = 0; i < 6; i++) dashPts.push([W * (i % 2 ? 0.1 + Math.random() * 0.25 : 0.65 + Math.random() * 0.25), H * (0.18 + Math.random() * 0.5)])
+  dashPts.push([W * 0.85, cy + U * 0.1])
+  let hero = dashPts[0], cut = 0
+  function close() {
+    if (closed) return; closed = true; wrap.style.opacity = '0'; setTimeout(() => wrap.remove(), 600); if (done) done()
+  }
+  wrap.onclick = () => { if (performance.now() - t0 > 6200) close() }
+  tone(40, 0, 1.6, 'sine', 0.15)
+  function drawBolt(b, now) {
+    const a = 1 - (now - b.born) / b.life; if (a <= 0) return false
+    ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round'
+    ctx.beginPath(); b.p.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))
+    ctx.shadowColor = '#ffd84d'; ctx.shadowBlur = 30
+    ctx.strokeStyle = `rgba(255,200,40,${0.45 * a})`; ctx.lineWidth = 16 * b.w; ctx.stroke()
+    ctx.strokeStyle = `rgba(255,240,150,${0.9 * a})`; ctx.lineWidth = 6 * b.w; ctx.stroke()
+    ctx.strokeStyle = `rgba(255,255,255,${a})`; ctx.lineWidth = 2.2 * b.w; ctx.stroke()
+    ctx.restore(); return true
+  }
+  function emoji(ch, x, y, size, glow) {
+    ctx.save(); ctx.font = `${size}px "Apple Color Emoji","Segoe UI Emoji",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = 25 }
+    ctx.fillText(ch, x, y); ctx.restore()
+  }
+  function frame(now) {
+    if (closed) return
+    const el = now - t0
+    // ---- 时间线 ----
+    at(500, () => { flash = 0.35; addBolt(W * 0.7, 0, W * 0.6, H * 0.35, 0.7, 300); crack(false) })
+    at(300, () => { cap.textContent = '⚡ 屏住呼吸……'; cap.className = 'th-cap show' })
+    at(1300, () => { cap.textContent = '⚡ 雷光一闪 ⚡'; cap.className = 'th-cap show big' })
+    at(2400, () => { cap.className = 'th-cap' })
+    for (let i = 0; i < dashPts.length - 1; i++) at(2500 + i * 330, () => {
+      const [a, b] = [dashPts[i], dashPts[i + 1]]; addBolt(a[0], a[1], b[0], b[1], i === 0 ? 1.6 : 1.1, 1400); hero = b
+      flash = i === 0 ? 1 : 0.45; shakeT = now + 250; crack(i === 0)
+      for (let k = 0; k < 14; k++) sparks.push({ x: b[0], y: b[1], vx: (Math.random() - 0.5) * 9, vy: (Math.random() - 0.5) * 9, l: 1 })
+    })
+    at(5100, () => { cut = now; flash = 1; shakeT = now + 600; crack(true); addBolt(W * 0.2, cy - U * 0.3, W * 0.8, cy + U * 0.25, 2, 1500) })
+    at(6200, () => { document.getElementById('thText').classList.add('show'); SFX.win(); document.getElementById('thTip').style.opacity = 1 })
+    if (el > 6400 && Math.random() < 0.06) { const x = Math.random() < 0.5 ? Math.random() * W * 0.2 : W * (0.8 + Math.random() * 0.2); addBolt(x, 0, x + (Math.random() - 0.5) * 80, H * (0.2 + Math.random() * 0.5), 0.6, 350); if (Math.random() < 0.4) tone(1800, 0, 0.05, 'square', 0.02) }
+    if (el > 10000) return close()
+    // ---- 画面 ----
+    ctx.save()
+    if (now < shakeT) ctx.translate((Math.random() - 0.5) * 14, (Math.random() - 0.5) * 14)
+    ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = 'rgba(8,10,30,0.35)'; ctx.fillRect(-20, -20, W + 40, H + 40)
+    ctx.strokeStyle = 'rgba(160,180,255,0.35)'; ctx.lineWidth = 1
+    rain.forEach(r => { r.y += r.v; r.x -= 2; if (r.y > H) { r.y = -20; r.x = Math.random() * W * 1.2 } ctx.beginPath(); ctx.moveTo(r.x, r.y); ctx.lineTo(r.x - 4, r.y - 16); ctx.stroke() })
+    // 鬼：被斩之后裂成两半飞开
+    if (el > 1300) {
+      const ox = W * 0.5, oy = cy, sz = U * 0.42
+      if (!cut) emoji('👹', ox + Math.sin(el / 90) * 2, oy, sz, '#ff3355')
+      else {
+        const k = Math.min(1, (now - cut) / 900), fade = Math.max(0, 1 - (now - cut) / 1400)
+        ctx.save(); ctx.globalAlpha = fade
+        ;[1, -1].forEach(s => {
+          ctx.save(); ctx.beginPath()
+          // 斜线一刀：上半 / 下半
+          if (s > 0) { ctx.moveTo(-W, -H); ctx.lineTo(W * 2, -H); ctx.lineTo(W * 2, oy + sz * 0.1 + (W * 2 - ox) * 0.45); ctx.lineTo(-W, oy + sz * 0.1 - (ox + W) * 0.45) }
+          else { ctx.moveTo(-W, H * 2); ctx.lineTo(W * 2, H * 2); ctx.lineTo(W * 2, oy + sz * 0.1 + (W * 2 - ox) * 0.45); ctx.lineTo(-W, oy + sz * 0.1 - (ox + W) * 0.45) }
+          ctx.clip(); emoji('👹', ox - s * k * 60, oy - s * k * 50 + k * k * 120, sz, null); ctx.restore()
+        })
+        ctx.restore()
+      }
+    }
+    ctx.globalCompositeOperation = 'lighter'
+    for (let i = bolts.length - 1; i >= 0; i--) if (!drawBolt(bolts[i], now)) bolts.splice(i, 1)
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const p = sparks[i]; p.x += p.vx; p.y += p.vy; p.vx *= 0.92; p.vy *= 0.92; p.l -= 0.03
+      if (p.l <= 0) { sparks.splice(i, 1); continue }
+      ctx.fillStyle = `rgba(255,230,120,${p.l})`; ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, 7); ctx.fill()
+    }
+    // 小剑士：蓄力时身边噼啪冒电
+    if (el > 1300 && el < 6200) {
+      if (el < 2500 && Math.random() < 0.5) { const [x, y] = hero, a = Math.random() * 7; addBolt(x, y, x + Math.cos(a) * U * 0.12, y + Math.sin(a) * U * 0.12, 0.35, 120); if (Math.random() < 0.3) tone(2400 + Math.random() * 800, 0, 0.03, 'square', 0.015) }
+      ctx.globalCompositeOperation = 'source-over'
+      emoji('🧒', hero[0], hero[1], U * 0.13, '#ffd84d'); emoji('🗡️', hero[0] + U * 0.07, hero[1] + U * 0.02, U * 0.08, '#fff')
+    }
+    ctx.restore()
+    if (flash > 0) { ctx.fillStyle = `rgba(255,250,220,${flash})`; ctx.fillRect(0, 0, W, H); flash = Math.max(0, flash - 0.08) }
+    requestAnimationFrame(frame)
+  }
+  requestAnimationFrame(frame)
+}
 function fireworks(text, sub, ms = 5000) {
   const wrap = document.createElement('div'); wrap.className = 'fw'
   wrap.innerHTML = `<canvas></canvas><div class="fw-text">${esc(text)}<small>${esc(sub || '')}</small><small class="fw-date">${dateCN()} ${timeStr()}</small></div><div class="fw-tip">点一下继续</div>`
@@ -1221,7 +1325,7 @@ function demoPanel() {
     <div class="dg">🛍️ 商店和钱包</div>${B('demo.ownAll()', '买齐全部装扮')}${B('showWallet()', '看兑换券')}${B("go('shop')", '去商店')}
     <div class="dg">🏆 每周挑战</div>${B('demo.weekAll()', '完成全部周任务')}${B('demo.chest()', '看开宝箱')}
     <div class="dg">⚔️ 闯关结局</div>${B('demo.boss(true)', '斩鬼胜利')}${B('demo.boss(false)', '斩鬼失败')}${B('demo.perfect()', '满分·薇薇真棒')}${B('demo.allBoss()', '9 只鬼全打败')}
-    <div class="dg">📝 小测验结局</div>${B('demo.test(100)', '100 分')}${B('demo.test(94)', '90+ 分')}${B('demo.test(70)', '60+ 分')}${B('demo.test(40)', '不及格')}${B('demo.streak()', '连续 3 次满分')}
+    <div class="dg">📝 小测验结局</div>${B('demo.test(100)', '100 分')}${B('demo.test(94)', '90+ 分')}${B('demo.test(70)', '60+ 分')}${B('demo.test(40)', '不及格')}${B('demo.streak()', '连续 3 次满分')}${B("thunderShow('无敌的薇薇', '⚡ 雷光一闪 · 小测验满分 100 分！')", '⚡ 雷光一闪动画')}
     <div class="dg">其他</div>${B('showHelp()', '看游戏说明')}${B('demo.clear()', '清空体验存档')}
   </div><p class="small"><a class="lnk" href="./">← 回到薇薇的正常模式</a></p><button class="btn" onclick="closeModal()">关闭</button>`)
 }

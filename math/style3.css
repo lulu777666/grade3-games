@@ -150,3 +150,12 @@
 .topbar{gap:5px}
 .topbar .title{font-size:17px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .topbar .chip{padding:5px 7px;font-size:13px;white-space:nowrap;flex-shrink:0}
+/* 雷光一闪 */
+.fw.thunder{background:#080a1e}
+.th-cap{position:absolute;left:0;right:0;bottom:16%;text-align:center;color:#ffe680;font-size:22px;font-weight:900;letter-spacing:6px;opacity:0;transition:opacity .4s,transform .4s;text-shadow:0 0 12px #ffb800;pointer-events:none}
+.th-cap.show{opacity:1}
+.th-cap.big{font-size:36px;transform:scale(1.1)}
+.th-text{position:absolute;left:0;right:0;top:30%;text-align:center;opacity:0;transform:scale(2.2);transition:opacity .5s,transform .6s cubic-bezier(.2,1.6,.4,1);pointer-events:none}
+.th-text.show{opacity:1;transform:scale(1)}
+.th-text b{display:block;font-size:52px;font-weight:900;color:#ffe066;text-shadow:0 0 18px #ffb300,0 0 40px #ff8a00,0 4px 0 #b36b00;letter-spacing:4px}
+.th-text small{display:block;color:#fff;font-size:17px;margin-top:10px;text-shadow:0 0 8px #000}
