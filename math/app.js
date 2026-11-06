@@ -4,25 +4,48 @@
 // ============================================================
 const $app = document.getElementById('app')
 const $fx = document.getElementById('fx')
-const KEY = 'math3a_v1'
+// 家长体验模式：网址后面加 ?demo=1，用另一份存档，不影响薇薇的进度
+const DEMO = /[?&]demo=1/.test(location.search)
+const KEY = DEMO ? 'math3a_demo' : 'math3a_v1'
 const DAILY_GOAL = 30
 const TEST_MIN = 30, TEST_MID = 20, TEST_HARD = 10, PT_MID = 3, PT_HARD = 4 // 20×3 + 10×4 = 100
+const TEST_PER_DAY = 5
 const DRILL_N = 5
+
+// ============================================================
+//  金币规则（算好了的）：
+//  每周最多能赚：答题 40×7 + 今日任务 20×7 + 每周任务 40×6 + 宝箱 160 + 小测验连续3次满分 60（每周1次） = 880
+//  花销：小樱升满4级 50+60+70+80 = 260，商店全部 420，爸爸的钱包 200 → 880（刚好）。少了测验奖金只有 820，买不起钱包
+//  不做每周任务最多只有 480，连小樱升满再买完商店（680）都不够，所以每周任务一定要做
+// ============================================================
+const COIN = { mid: 1, hard: 2, dayCap: 40, daily: 20, weekTask: 40, chest: 160, testStreak: 60 }
+const LV_COST = [50, 60, 70, 80]
+const WALLET = { p: 200, n: '爸爸的钱包 20 元' }
 
 // ---------------- 存档 ----------------
 function defaults() {
   return {
-    ver: 3, coins: 0, xp: 0, stars: {}, wrong: [], wrongDone: [], badges: [], bestCombo: 0, totalCorrect: 0, totalAns: 0, hardCorrect: 0,
+    ver: 4, coins: 0, xp: 0, petLv: 0, stars: {}, wrong: [], wrongDone: [], badges: [], bestCombo: 0, totalCorrect: 0, totalAns: 0, hardCorrect: 0,
     streak: 0, lastDay: '', fixed: 0, daily: { date: '', correct: 0, claimed: false },
-    sound: true, music: true, unlockAll: false, petName: '算算龙', tests: [], testUnits: [0, 1, 2, 3, 4, 5, 6, 7, 8],
-    recentQ: [], owned: [], acc: '', pat: '', feedDay: '', week: null, weekHist: [], bossKills: 0,
+    sound: true, music: true, unlockAll: false, petName: '小樱', tests: [], testUnits: [0, 1, 2, 3, 4, 5, 6, 7, 8],
+    recentQ: [], owned: [], acc: '', pat: '', week: null, weekHist: [], bossKills: 0,
+    coinDay: { date: '', n: 0 }, skillDay: { date: '', used: [] }, testDay: { date: '', n: 0 }, perfStreak: 0, walletLog: [], maxLv: 0,
   }
 }
 let S, saved = {}
 try { saved = JSON.parse(localStorage.getItem(KEY) || '{}') || {} } catch (e) { saved = {} }
 S = Object.assign(defaults(), saved)
-// 第三版按新版教材重新排了单元：旧的星星和错题对不上了，清掉；金币、成长值、测验记录保留
-if (saved.coins !== undefined && saved.ver !== 3) { S.ver = 3; S.stars = {}; S.wrong = []; S.wrongDone = []; S.testUnits = [0, 1, 2, 3, 4, 5, 6, 7, 8]; S.recentQ = [] }
+if (saved.coins !== undefined && (saved.ver || 0) < 4) {
+  // 第三版按新版教材重新排了单元：旧的星星和错题对不上了，清掉
+  if ((saved.ver || 0) < 3) { S.stars = {}; S.wrong = []; S.wrongDone = []; S.testUnits = [0, 1, 2, 3, 4, 5, 6, 7, 8]; S.recentQ = [] }
+  // 第四版：宠物换成小樱，金币变“值钱”了：旧金币按 5:1 换算，原来的成长阶段换成小樱的等级
+  S.petLv = [0, 20, 80, 200, 500].filter(x => (saved.xp || 0) >= x).length - 1
+  S.maxLv = S.petLv
+  S.coins = Math.round((saved.coins || 0) / 5)
+  S.petName = '小樱'; S.owned = []; S.acc = ''; S.pat = ''
+  S.ver = 4
+}
+if (DEMO) S.unlockAll = true
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)) } catch (e) { } }
 const dayKey = d => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
 const today = () => dayKey(new Date())
@@ -203,37 +226,59 @@ function vibrate(ms) { try { navigator.vibrate && navigator.vibrate(ms) } catch 
 function setTheme(t) { document.body.dataset.theme = t || '' }
 
 // ============================================================
-//  宠物「算算龙」：长大会解锁本领
+//  小伙伴「小樱」：花金币升级（最高4级），会学会本领
+//  本领每天每种只能用1次，用一次小樱就降1级（要再花金币升回来）
 // ============================================================
 const PET = [
-  { xp: 0, face: '🥚', stage: '神秘的蛋', say: ['里面好像有什么在动……', '多答对几题，我就要破壳啦！'] },
-  { xp: 20, face: '🐣', stage: '刚破壳', say: ['哇，我出来了！谢谢薇薇！', '遇到难的选择题，可以叫我帮忙！'] },
-  { xp: 80, face: '🦎', stage: '小蜥蜴', say: ['我会用护盾保护你啦！', '薇薇算得真快！'] },
-  { xp: 200, face: '🐲', stage: '小龙', say: ['我变成小龙啦！打鬼时多给你一颗心！', '一起去斩鬼吧！'] },
-  { xp: 500, face: '🐉', stage: '神龙', say: ['我是数学神龙！金币多给你一半！', '薇薇是最棒的数学小高手！'] },
+  { face: '🌱', stage: '樱花种子', say: ['给我升级，我想快快长大！', '薇薇加油，我在为你打气！'] },
+  { face: '🌷', stage: '樱花花苞', say: ['我发芽啦！谢谢薇薇！', '选择题太难时，我能帮你去掉一个错的选项。'] },
+  { face: '🌸', stage: '樱花精灵', say: ['我开花啦！', '不会的题，我可以先给你一句小提示。'] },
+  { face: '👧', stage: '小剑士小樱', say: ['我变成小剑士啦！', '我能给你开护盾，答错一次也不怕！'] },
+  { face: '👸', stage: '樱花公主', say: ['我是樱花公主！', '斩鬼的时候，我多送你一颗心！'] },
 ]
 const SKILLS = [
-  { lv: 1, i: '💡', n: '排除法', d: '每关1次：选择题帮你去掉2个错的选项' },
-  { lv: 2, i: '🛡️', n: '护盾', d: '每关1次：答错时挡住，不断连对、不扣心，可以再答一次' },
-  { lv: 3, i: '❤️', n: '龙之心', d: '斩鬼战多 1 颗心（4颗）' },
-  { lv: 4, i: '💰', n: '招财', d: '闯关得到的金币多 50%' },
+  { lv: 1, i: '💡', n: '排除法', d: '选择题去掉 1 个错的选项' },
+  { lv: 2, i: '🔍', n: '小提示', d: '先看讲解的第一句话' },
+  { lv: 3, i: '🛡️', n: '护盾', d: '这一题答错了可以再答一次' },
+  { lv: 4, i: '❤️', n: '樱之心', d: '斩鬼战多 1 颗心（最终奖励）' },
 ]
-const petIdx = () => { let k = 0; PET.forEach((x, i) => { if (S.xp >= x.xp) k = i }); return k }
-const petNow = () => PET[petIdx()]
-const petNext = () => PET.find(x => x.xp > S.xp)
-const hasSkill = lv => petIdx() >= lv
-function addXp(n) { const b = petIdx(); S.xp += n; const a = petIdx(); return a !== b ? PET[a] : null }
-const fedToday = () => S.feedDay === today()
+const petIdx = () => S.petLv
+const petNow = () => PET[S.petLv]
+const petNext = () => PET[S.petLv + 1]
+const skillUsed = lv => S.skillDay.date === today() && S.skillDay.used.includes(lv)
+const hasSkill = lv => S.petLv >= lv && !skillUsed(lv)
+function useSkill(lv) { // 用本领：记下今天用过了，小樱降 1 级
+  if (S.skillDay.date !== today()) S.skillDay = { date: today(), used: [] }
+  S.skillDay.used.push(lv)
+  S.petLv = Math.max(0, S.petLv - 1); save()
+}
+function addXp(n) { S.xp += n; return null }
+function levelUp() {
+  if (S.petLv >= 4) return
+  const c = LV_COST[S.petLv]
+  if (S.coins < c) { SFX.bad(); toast(`金币不够啦，升级要 ${c} 💰`); return }
+  S.coins -= c; S.petLv++; S.maxLv = Math.max(S.maxLv, S.petLv); wk('levelup'); SFX.coin()
+  checkBadges(); save(); render(); showEvolve(petNow())
+}
 
-// ---------------- 商店：龙的装扮 + 剑士的羽织花纹 ----------------
+// ---------------- 商店：小樱的装扮 + 和服花纹 ----------------
 const ACC = [
-  { id: 'bow', i: '🎀', n: '蝴蝶结', p: 100 }, { id: 'flower', i: '🌸', n: '樱花', p: 150 }, { id: 'hat', i: '🎩', n: '小礼帽', p: 200 },
-  { id: 'glass', i: '🕶️', n: '酷墨镜', p: 300 }, { id: 'star', i: '⭐', n: '星星发卡', p: 500 }, { id: 'crown', i: '👑', n: '王冠', p: 800 },
+  { id: 'bow', i: '🎀', n: '蝴蝶结', p: 30 }, { id: 'hairpin', i: '🌸', n: '樱花发卡', p: 40 }, { id: 'bell', i: '🎐', n: '风铃', p: 40 },
+  { id: 'geta', i: '🩴', n: '小木屐', p: 40 }, { id: 'kimono', i: '👘', n: '小浴衣', p: 60 }, { id: 'crown', i: '👑', n: '小王冠', p: 60 },
 ]
 const PAT = [
-  { id: 'ichimatsu', n: '绿黑格纹', p: 300 }, { id: 'asanoha', n: '粉色麻叶纹', p: 300 }, { id: 'kikko', n: '龟甲纹', p: 400 },
-  { id: 'uroko', n: '鳞纹', p: 400 }, { id: 'seigaiha', n: '青海波纹', p: 500 }, { id: 'flame', n: '火焰纹', p: 600 },
+  { id: 'ichimatsu', n: '绿黑格纹', p: 20 }, { id: 'asanoha', n: '粉色麻叶纹', p: 20 }, { id: 'kikko', n: '龟甲纹', p: 25 },
+  { id: 'uroko', n: '鳞纹', p: 25 }, { id: 'seigaiha', n: '青海波纹', p: 30 }, { id: 'flame', n: '火焰纹', p: 30 },
 ]
+const allOwned = () => ACC.concat(PAT).every(a => S.owned.includes(a.id))
+// 每天答题金币有上限
+function earn(n) {
+  if (S.coinDay.date !== today()) S.coinDay = { date: today(), n: 0 }
+  const g = Math.max(0, Math.min(n, COIN.dayCap - S.coinDay.n))
+  S.coinDay.n += g; S.coins += g
+  return g
+}
+const coinLeft = () => (S.coinDay.date === today() ? COIN.dayCap - S.coinDay.n : COIN.dayCap)
 const accNow = () => ACC.find(a => a.id === S.acc)
 const patCls = () => (S.pat ? `pat-${S.pat}` : '')
 
@@ -258,18 +303,18 @@ const SKILL_NAME = c => (c >= 10 ? '旭日斩' : c >= 7 ? '雷光一闪' : c >= 
 //  每周挑战：每周一换一批任务，完成领金币，全部完成开宝箱
 // ============================================================
 const WEEK_POOL = [
-  { id: 'correct', i: '✅', n: '答对 100 道题', goal: 100, coin: 80 },
-  { id: 'hard', i: '💪', n: '答对 25 道难题', goal: 25, coin: 100 },
-  { id: 'star3', i: '⭐', n: '拿到 5 次三星', goal: 5, coin: 100 },
-  { id: 'boss', i: '⚔️', n: '斩鬼 2 次（打败Boss）', goal: 2, coin: 150 },
-  { id: 'test80', i: '📝', n: '小测验得 80 分以上', goal: 1, coin: 120 },
-  { id: 'days', i: '📅', n: '这周有 4 天来练习', goal: 4, coin: 120 },
-  { id: 'mastered', i: '🎯', n: '消灭 3 道错题', goal: 3, coin: 120 },
-  { id: 'combo', i: '🔥', n: '一关里连对 10 题', goal: 10, coin: 100 },
-  { id: 'perfect', i: '💯', n: '满分通关 3 次', goal: 3, coin: 120 },
-  { id: 'feed', i: '🍖', n: '有 3 天喂了算算龙', goal: 3, coin: 60 },
-]
-const CHEST_COIN = 300
+  { id: 'correct', i: '✅', n: '答对 100 道题', goal: 100 },
+  { id: 'hard', i: '💪', n: '答对 25 道难题', goal: 25 },
+  { id: 'star3', i: '⭐', n: '拿到 5 次三星', goal: 5 },
+  { id: 'boss', i: '⚔️', n: '斩鬼 1 次（打败Boss）', goal: 1 },
+  { id: 'test80', i: '📝', n: '小测验得 80 分以上', goal: 1 },
+  { id: 'days', i: '📅', n: '这周有 4 天来练习', goal: 4 },
+  { id: 'mastered', i: '🎯', n: '消灭 3 道错题', goal: 3 },
+  { id: 'combo', i: '🔥', n: '一关里连对 10 题', goal: 10 },
+  { id: 'perfect', i: '💯', n: '满分通关 3 次', goal: 3 },
+  { id: 'levelup', i: '🌸', n: '给小樱升级 1 次', goal: 1 },
+].map(t => Object.assign(t, { coin: COIN.weekTask }))
+const CHEST_COIN = COIN.chest
 function mondayOf(d = new Date()) { const m = new Date(d); m.setHours(0, 0, 0, 0); m.setDate(m.getDate() - ((m.getDay() + 6) % 7)); return m }
 function seeded(seed) { let s = seed; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280 } }
 function ensureWeek() {
@@ -308,7 +353,8 @@ const BADGES = [
   { id: 'q500', i: '🎓', n: '数学博士', d: '累计答对500题', ok: () => S.totalCorrect >= 500 },
   { id: 'd7', i: '🗓️', n: '一周不断', d: '连续7天来练习', ok: () => S.streak >= 7 },
   { id: 'fix10', i: '🎯', n: '错题克星', d: '消灭10道错题', ok: () => S.fixed >= 10 },
-  { id: 'pet', i: '🐲', n: '驯龙高手', d: '算算龙长成小龙', ok: () => S.xp >= 200 },
+  { id: 'pet', i: '👸', n: '樱花公主', d: '小樱升到满级', ok: () => S.maxLv >= 4 },
+  { id: 'wallet', i: '👛', n: '爸爸的钱包', d: '买到爸爸的钱包', ok: () => S.walletLog.length >= 1 },
   { id: 'shop', i: '🛍️', n: '小小买家', d: '在商店买1样东西', ok: () => S.owned.length >= 1 },
   { id: 'chest', i: '🎁', n: '周冠军', d: '开过1次每周宝箱', ok: () => S.week && S.week.chest || S.weekHist.some(w => w.chest) },
 ]
@@ -339,7 +385,8 @@ function topbar(title) {
   return `<div class="topbar"><div class="title">${title}</div>
     <span class="chip" id="coinChip">💰 ${S.coins}</span>
     <span class="chip" title="连续天数">🔥 ${S.streak}天</span>
-    <button class="chip wrongchip ${n ? 'has' : ''}" onclick="go('wrong')">📕 错题 ${n}</button></div>`
+    <button class="chip wrongchip ${n ? 'has' : ''}" onclick="go('wrong')">📕 错题 ${n}</button>
+    <button class="chip helpchip" onclick="showHelp()">📖 说明</button></div>`
 }
 function nav() {
   const n = S.wrong.length, r = wkReady(), b = (t, i, name, extra = '') => `<button class="${tab === t ? 'on' : ''}" onclick="go('${t}')"><b>${i}</b>${name}${extra}</button>`
@@ -349,21 +396,21 @@ function soundLinks() {
   return `<div class="small" style="text-align:center;margin:18px 0">
     <a href="javascript:toggleMusic()" class="lnk">${S.music ? '🎵 音乐：开' : '🎵 音乐：关'}</a>
     <a href="javascript:toggleSound()" class="lnk">${S.sound ? '🔊 音效：开' : '🔇 音效：关'}</a>
-    <a href="javascript:toggleUnlock()" class="lnk">${S.unlockAll ? '🔓 全部解锁：开' : '🔒 全部解锁：关'}</a><br>人教版三年级上册数学（新版教材）</div>`
+    <a href="javascript:toggleUnlock()" class="lnk">${S.unlockAll ? '🔓 全部解锁：开' : '🔒 全部解锁：关'}</a><br>${DEMO ? '<a href="./" class="lnk">← 回到正常模式</a>' : '<a href="?demo=1" class="lnk">🧪 家长体验模式</a>'}<br>人教版三年级上册数学（新版教材）</div>`
 }
 
 // ---------------- 首页地图 ----------------
 function unlocked(u, l) { return S.unlockAll || l === 0 || (S.stars[lvId(u, l - 1)] || 0) > 0 }
 function toggleUnlock() { S.unlockAll = !S.unlockAll; save(); SFX.tap(); toast(S.unlockAll ? '🔓 全部关卡已解锁' : '🔒 恢复成：过一关才解锁下一关'); render() }
 function petCard() {
-  const p = petNow(), nx = petNext(), pct = nx ? Math.round((S.xp - p.xp) / (nx.xp - p.xp) * 100) : 100, a = accNow(), k = petIdx()
-  const sk = SKILLS.map(s => `<span class="sk ${k >= s.lv ? 'on' : ''}" title="${s.d}">${s.i}${s.n}</span>`).join('')
+  const p = petNow(), nx = petNext(), a = accNow(), k = S.petLv
+  const sk = SKILLS.map(s => `<span class="sk ${k >= s.lv ? (skillUsed(s.lv) ? 'used' : 'on') : ''}" title="${s.d}">${s.i}${s.n}${k >= s.lv && skillUsed(s.lv) ? '·今天用过' : ''}</span>`).join('')
   return `<div class="card pet"><div class="face" id="petFace" onclick="petTap()">${p.face}${a ? `<span class="acc">${a.i}</span>` : ''}</div>
-      <div class="info"><div class="name">${esc(S.petName)} <span class="small">· ${p.stage}</span>${fedToday() ? '<span class="buff">😋 吃饱了：今天金币+20%</span>' : ''}</div>
-        <div class="say" id="petSay">${pickSay(p)}</div><div class="bar"><i style="width:${pct}%"></i></div>
-        <div class="small">${nx ? `成长值 ${S.xp}/${nx.xp}（答对1题+1，喂食+5）· 下一个本领：${SKILLS[k] ? SKILLS[k].i + SKILLS[k].n : ''}` : '已经是最强形态啦！'}</div>
+      <div class="info"><div class="name">${esc(S.petName)} <span class="small">· ${p.stage} · ${k}/4 级</span></div>
+        <div class="say" id="petSay">${pickSay(p)}</div><div class="lvdots">${[1, 2, 3, 4].map(i => `<i class="${i <= k ? 'on' : ''}"></i>`).join('')}</div>
+        <div class="small">${nx ? `下一级学会：${SKILLS[k].i}${SKILLS[k].n}（${SKILLS[k].d}）` : '满级啦！'}<br>本领每天每种只能用 1 次，用了小樱会降 1 级</div>
         <div class="skills">${sk}</div></div>
-      <div class="petbtns"><button class="btn gold sm" onclick="feed()">喂食<br>30💰</button><button class="btn sm shopbtn" onclick="go('shop')">🛍️商店</button></div></div>`
+      <div class="petbtns">${nx ? `<button class="btn gold sm" onclick="levelUp()">升级<br>${LV_COST[k]}💰</button>` : '<span class="small">已满级</span>'}<button class="btn sm shopbtn" onclick="go('shop')">🛍️商店</button></div></div>`
 }
 function renderMap() {
   const d = S.daily
@@ -377,11 +424,11 @@ function renderMap() {
   h += `<div class="card daily"><div class="ic">${d.claimed ? '✅' : '🎁'}</div>
       <div class="info"><b>今日任务：答对 ${DAILY_GOAL} 题</b>
         <div class="bar" style="margin-top:6px"><i style="width:${Math.min(100, d.correct / DAILY_GOAL * 100)}%;background:linear-gradient(90deg,#5ce1a0,#2bb673)"></i></div>
-        <div class="small">${Math.min(d.correct, DAILY_GOAL)}/${DAILY_GOAL}　完成可领 80 金币</div></div>
+        <div class="small">${Math.min(d.correct, DAILY_GOAL)}/${DAILY_GOAL}　完成可领 ${COIN.daily} 金币 · 今天答题还能赚 ${coinLeft()}/${COIN.dayCap} 💰</div></div>
       ${d.claimed ? '<span class="small">已领取</span>' : `<button class="btn green sm" ${d.correct >= DAILY_GOAL ? '' : 'disabled'} onclick="claimDaily()">领取</button>`}</div>`
-  h += `<div class="card testcard weekcard" onclick="go('week')"><div class="ic">🏆</div><div class="info"><b>本周挑战 ${done}/6</b><div class="small">完成任务领金币，6 个全完成开宝箱（${CHEST_COIN}💰 + 神秘奖励）${wkReady() ? `<br><b style="color:#e8505b">有 ${wkReady()} 个奖励可以领！</b>` : ''}</div></div><span class="btn sm">去看看</span></div>`
+  h += `<div class="card testcard weekcard" onclick="go('week')"><div class="ic">🏆</div><div class="info"><b>本周挑战 ${done}/6</b><div class="small">每个任务 ${COIN.weekTask}💰，6 个全完成开宝箱（${CHEST_COIN}💰）${wkReady() ? `<br><b style="color:#e8505b">有 ${wkReady()} 个奖励可以领！</b>` : ''}</div></div><span class="btn sm">去看看</span></div>`
   const bt = bestTest()
-  h += `<div class="card testcard" onclick="go('test')"><div class="ic">📝</div><div class="info"><b>综合小测验</b><div class="small">${TEST_MID + TEST_HARD}题 · ${TEST_MIN}分钟 · 满分100分 · 可选单元${bt >= 0 ? `<br>最好成绩：${bt}分` : ''}</div></div><span class="btn sm">去测验</span></div>`
+  h += `<div class="card testcard" onclick="go('test')"><div class="ic">📝</div><div class="info"><b>综合小测验</b><div class="small">${TEST_MID + TEST_HARD}题 · ${TEST_MIN}分钟 · 每天 ${TEST_PER_DAY} 次 · 连续 3 次满分奖 ${COIN.testStreak}💰${bt >= 0 ? `<br>最好成绩：${bt}分` : ''}</div></div><span class="btn sm">去测验</span></div>`
   let firstNext = null
   UNITS.forEach((U, u) => {
     const got = [0, 1, 2, 3].reduce((a, l) => a + (S.stars[lvId(u, l)] || 0), 0)
@@ -403,29 +450,18 @@ function petTap() {
   f.classList.remove('jump'); void f.offsetWidth; f.classList.add('jump')
   document.getElementById('petSay').textContent = pickSay(petNow()); SFX.tap()
 }
-function feed() {
-  if (S.coins < 30) { toast('金币不够啦 💰<br>去闯关赚金币吧！'); return }
-  S.coins -= 30; SFX.coin()
-  const first = !fedToday()
-  if (first) { S.feedDay = today(); wk('feed') }
-  const evo = addXp(5)
-  save(); renderMap(); petTap()
-  document.getElementById('petSay').textContent = first ? '好好吃！今天闯关金币多 20%！😋' : '好好吃！成长值+5 😋'
-  if (evo) showEvolve(evo)
-  checkBadges().forEach(b => toast(`获得徽章 ${b.i} ${b.n}`)); save()
-}
 function claimDaily() {
   if (S.daily.claimed || S.daily.correct < DAILY_GOAL) return
-  S.daily.claimed = true; S.coins += 80; save(); SFX.win(); confetti(40)
-  toast('🎁 今日任务完成！<br>+80 金币'); renderMap()
+  S.daily.claimed = true; S.coins += COIN.daily; save(); SFX.win(); confetti(40)
+  toast(`🎁 今日任务完成！<br>+${COIN.daily} 金币`); renderMap()
 }
 function tapNode(u, l) {
   if (!unlocked(u, l)) { SFX.bad(); toast('🔒 先通过前一关才能解锁哦'); return }
   SFX.tap()
   if (l === 3) {
-    const o = ONI[u], hearts = hasSkill(3) ? 4 : 3
+    const o = ONI[u], extra = hasSkill(4)
     modal(`<div class="oni-intro ${patCls()}"><div class="oni-big">${o.f}</div></div><h3>斩鬼战：${o.n}</h3><p class="oni-say">“${o.say}”</p>
-      <p>一共12题（4道难题），你有 ${hearts} 颗❤️${hasSkill(3) ? '（算算龙多给了 1 颗）' : ''}<br>答对一题就砍鬼一刀，答错鬼会打你一下。<br>赢了金币翻倍，剑士阶级升一级！</p>
+      <p>一共12题（4道难题），你只有 <b>1 颗❤️</b>${extra ? '<br>👸 樱花公主多送你 1 颗心（这颗心掉了，小樱会降 1 级）' : ''}<br>答错一题就输了，要非常仔细哦！<br>赢了金币翻倍，剑士阶级升一级！</p>
       <div class="row"><button class="btn ghost" onclick="closeModal()">再想想</button><button class="btn red" onclick="closeModal();startLevel(${u},3)">⚔️ 出发斩鬼！</button></div>`)
   } else startLevel(u, l)
 }
@@ -438,16 +474,37 @@ function closeModal() { const m = document.getElementById('modal'); if (m) m.rem
 function showEvolve(p) {
   SFX.win(); confetti(80)
   const sk = SKILLS.find(s => PET[s.lv] === p)
-  modal(`<div class="i" style="font-size:80px">${p.face}</div><h3>${esc(S.petName)}进化了！</h3><p>变成了「${p.stage}」<br>${p.say[0]}</p>${sk ? `<div class="newbadge">学会新本领：${sk.i} ${sk.n}<br><span class="small">${sk.d}</span></div>` : ''}<button class="btn" onclick="closeModal()">太好了！</button>`)
+  modal(`<div class="i" style="font-size:80px">${p.face}</div><h3>${esc(S.petName)}升级了！</h3><p>变成了「${p.stage}」<br>${p.say[0]}</p>${sk ? `<div class="newbadge">学会新本领：${sk.i} ${sk.n}<br><span class="small">${sk.d}</span></div>` : ''}<button class="btn" onclick="closeModal()">太好了！</button>`)
 }
 
 // ---------------- 商店 ----------------
 function renderShop() {
   let h = topbar('🛍️ 商店')
-  h += `<div class="card small" style="font-size:14px;line-height:1.7">用闯关赚的金币买东西：<br>🐲 <b>龙的装扮</b>戴在算算龙身上；🎴 <b>羽织花纹</b>会换掉首页横幅、剑士卡和斩鬼战的花纹。<br>每周挑战的宝箱里也可能开出它们哦！</div>`
-  h += `<div class="h2">🐲 龙的装扮</div><div class="shop">` + ACC.map(a => shopItem(a, 'acc', `<span class="si">${a.i}</span>`)).join('') + '</div>'
-  h += `<div class="h2">🎴 羽织花纹</div><div class="shop">` + PAT.map(a => shopItem(a, 'pat', `<span class="sw pat-${a.id}"></span>`)).join('') + '</div>'
+  const n = ACC.concat(PAT).filter(a => S.owned.includes(a.id)).length, wk0 = S.week ? S.week.id : '', boughtWk = S.walletLog.some(x => x.week === wk0)
+  h += `<div class="card small" style="font-size:13px;line-height:1.7">💡 金币怎么赚：每天答题最多 ${COIN.dayCap}💰，今日任务 ${COIN.daily}💰，小测验连续 3 次满分 ${COIN.testStreak}💰（每周 1 次），每周任务每个 ${COIN.weekTask}💰，周宝箱 ${CHEST_COIN}💰。<br>全部拿满（包括测验连续 3 次满分的奖金），刚好够把小樱升满 4 级、买完全部装扮、再买下爸爸的钱包！</div>`
+  h += `<div class="h2">👘 小樱的装扮</div><div class="shop">` + ACC.map(a => shopItem(a, 'acc', `<span class="si">${a.i}</span>`)).join('') + '</div>'
+  h += `<div class="h2">🎴 和服花纹 <span class="small">（会换掉首页横幅和斩鬼战的花纹）</span></div><div class="shop">` + PAT.map(a => shopItem(a, 'pat', `<span class="sw pat-${a.id}"></span>`)).join('') + '</div>'
+  h += `<div class="h2">👛 超级大奖</div><div class="card wallet ${allOwned() ? '' : 'locked'}"><span class="wi">👛</span><div class="info"><b>${WALLET.n}</b>
+    <div class="small">${allOwned() ? (boughtWk ? '这周已经买过啦，下周一再来！' : '买下后会出现一张兑换券，截图给爸爸，换 20 元！') : `要先把商店里 12 样东西全部买齐才能买（已买 ${n}/12）`}</div></div>
+    <button class="btn sm ${allOwned() && !boughtWk ? 'red' : ''}" ${allOwned() && !boughtWk ? '' : 'disabled'} onclick="buyWallet()">${WALLET.p}💰</button></div>`
+  if (S.walletLog.length) h += `<div class="small" style="text-align:center">已经兑换过：${S.walletLog.map(x => x.date).join('、')}</div>`
   $app.innerHTML = h + `<div style="text-align:center;margin:16px 0"><button class="btn ghost" onclick="go('map')">← 回到首页</button></div>` + nav()
+}
+function buyWallet() {
+  ensureWeek()
+  if (!allOwned() || S.walletLog.some(x => x.week === S.week.id)) return
+  if (S.coins < WALLET.p) { SFX.bad(); toast(`金币不够啦，还差 ${WALLET.p - S.coins} 💰`); return }
+  const now = new Date()
+  S.coins -= WALLET.p; S.walletLog.push({ week: S.week.id, date: `${dateCN(now)} ${timeStr(now)}` }); checkBadges(); save()
+  renderShop(); showWallet()
+}
+function showWallet() {
+  const now = new Date()
+  SFX.win(); confetti(100)
+  modal(`<div class="ticket"><div class="t1">🎫 兑 换 券</div><div class="t2">👛 爸爸的钱包 · 20 元</div>
+    <div class="t3">持券人：薇薇</div><div class="t3">${dateCN(now)} ${timeStr(now)}</div>
+    <div class="t4">薇薇用一整周的努力赚到了这张券！<br>请爸爸兑现 20 元 💪</div>${DEMO ? '<div class="t5">（体验模式，不能兑换）</div>' : ''}</div>
+    <p class="small">📸 截图发给爸爸吧</p><button class="btn" onclick="closeModal()">好的！</button>`)
 }
 function shopItem(a, kind, pic) {
   const own = S.owned.includes(a.id), on = S[kind] === a.id
@@ -467,7 +524,7 @@ function equip(kind, id) { S[kind] = id; SFX.tap(); save(); renderShop() }
 // ============================================================
 let G = null
 function newGame(mode, qs, extra) {
-  G = Object.assign({ mode, qs, i: 0, right: 0, combo: 0, maxCombo: 0, coins: 0, hearts: 0, locked: false, typed: '', rec: [], score: 0, hint: 0, shield: 0 }, extra || {})
+  G = Object.assign({ mode, qs, i: 0, right: 0, combo: 0, maxCombo: 0, coins: 0, hearts: 0, locked: false, typed: '', rec: [], score: 0, shieldQ: -1 }, extra || {})
   renderQ()
 }
 function startLevel(u, l) {
@@ -475,8 +532,8 @@ function startLevel(u, l) {
   setTheme(boss ? 'boss' : ''); Music.play(boss ? 'oni' : 'calm')
   const qs = makeLevel(u, l, new Set(S.recentQ))
   S.recentQ = S.recentQ.concat(qs.map(q => q.hid)).slice(-600); save()
-  const hearts = boss ? (hasSkill(3) ? 4 : 3) : 0
-  newGame('level', qs, { u, l, boss, hearts, maxHearts: hearts, hp: 100, hint: hasSkill(1) ? 1 : 0, shield: hasSkill(2) ? 1 : 0 })
+  const extraHeart = boss && hasSkill(4), hearts = boss ? 1 + (extraHeart ? 1 : 0) : 0
+  newGame('level', qs, { u, l, boss, hearts, maxHearts: hearts, extraHeart, hp: 100 })
 }
 function startWrong() {
   if (!S.wrong.length) return
@@ -511,13 +568,14 @@ function renderQ() {
   const title = G.mode === 'wrong' ? '📕 错题复习' : G.mode === 'drill' ? '🎯 专项训练' : G.mode === 'test' ? '📝 小测验' : `${UNITS[G.u].icon} ${G.boss ? '斩鬼战' : LV_NAMES[G.l]}`
   let h = `<div class="quiz-top"><button class="x" onclick="quitQuiz()">✕</button><div class="bar"><i style="width:${pct}%"></i></div>`
   if (G.mode === 'test') h += `<span class="timer" id="timer">⏱ --:--</span>`
-  if (G.shield) h += `<span class="shieldon" title="护盾：答错一次不算">🛡️</span>`
+  if (shieldReady()) h += `<span class="shieldon" title="护盾：这题答错可以再答一次">🛡️</span>`
   h += `<button class="x mus" onclick="toggleMusicQuiz()">${S.music ? '🎵' : '🔇'}</button></div>`
   if (G.boss) h += oniBar()
   h += `<div class="qmeta"><span>${title} · ${G.i + 1}/${G.qs.length}</span>${G.mode === 'test' ? `<span>${UNITS[q.unit] ? UNITS[q.unit].icon + ' ' + UNITS[q.unit].name : ''}</span>` : `<span class="combo" id="combo">${G.combo >= 2 ? `🔥${G.combo}连对` : ''}</span><span>💰 +${G.coins}</span>`}</div>`
   h += `<div class="qcard" id="qcard">${diffTag(q)}<div class="qtext ${q.q.length > 26 ? 'long' : ''}">${fmt(q.q)}</div>${q.type === 'clock' ? '' : (q.fig || '')}`
   h += BODY[q.type](q) + '</div>'
-  if (G.hint && q.type === 'choice' && q.options.length >= 3 && G.mode === 'level') h += `<div class="skip"><button class="hintbtn" onclick="useHint()">💡 算算龙帮忙：去掉错的选项（本关还能用 1 次）</button></div>`
+  if (G.mode === 'level') h += skillBarHtml(q)
+  h += '<div id="peek"></div>'
   if (G.mode === 'test') h += `<div class="skip"><button onclick="skipQ()">这题不会，先跳过 →</button></div>`
   h += `<div class="feedback" id="fb"></div>`
   $app.innerHTML = h
@@ -527,12 +585,42 @@ function renderQ() {
 }
 function useHint() {
   const q = G.qs[G.i]
-  if (!G.hint || G.locked || q.type !== 'choice') return
-  G.hint = 0
-  const bad = shuffle([...document.querySelectorAll('.opt')].filter(b => q.options[+b.dataset.k] !== q.answer)).slice(0, q.options.length >= 4 ? 2 : 1)
+  if (!hasSkill(1) || G.locked || q.type !== 'choice') return
+  const bad = shuffle([...document.querySelectorAll('.opt')].filter(b => q.options[+b.dataset.k] !== q.answer && !b.disabled)).slice(0, 1)
+  if (!bad.length) return
   bad.forEach(b => { b.classList.add('gone'); b.disabled = true })
-  SFX.shield(); toast(`${petNow().face} 我帮你去掉了 ${bad.length} 个错的！`)
-  const hb = document.querySelector('.hintbtn'); if (hb) hb.parentNode.remove()
+  useSkill(1); SFX.shield(); toast(`${petNow().face} 去掉了 1 个错的！<br>小樱降到 ${S.petLv} 级`)
+  refreshSkills()
+}
+function usePeek() {
+  const q = G.qs[G.i]
+  if (!hasSkill(2) || G.locked || !q.tip) return
+  const first = String(q.tip).split(/[。；\n]/)[0]
+  useSkill(2); SFX.tap()
+  const p = document.getElementById('peek'); if (p) p.innerHTML = `<div class="peek">🔍 ${esc(first)}</div>`
+  toast(`小樱降到 ${S.petLv} 级`); refreshSkills()
+}
+function useShield() {
+  if (!hasSkill(3) || G.locked) return
+  G.shieldQ = G.i; useSkill(3); SFX.shield()
+  toast(`🛡️ 护盾打开！这题答错可以再答一次<br>小樱降到 ${S.petLv} 级`); refreshSkills()
+}
+// 用了本领后只刷新按钮（不重画题目，避免已经输入的内容丢失）
+function refreshSkills() {
+  save()
+  const bar = document.querySelector('.skillbar'); if (bar) bar.remove()
+  const pk = document.getElementById('peek')
+  if (pk) pk.insertAdjacentHTML('beforebegin', skillBarHtml(G.qs[G.i]))
+  const mus = document.querySelector('.quiz-top .mus')
+  if (shieldReady() && !document.querySelector('.shieldon') && mus) mus.insertAdjacentHTML('beforebegin', '<span class="shieldon">🛡️</span>')
+}
+function skillBarHtml(q) {
+  if (G.locked) return ''
+  const b = []
+  if (hasSkill(1) && q.type === 'choice' && q.options.length >= 3) b.push(`<button class="hintbtn" onclick="useHint()">💡 去掉1个错的</button>`)
+  if (hasSkill(2) && q.tip && !document.querySelector('.peek')) b.push(`<button class="hintbtn" onclick="usePeek()">🔍 小提示</button>`)
+  if (hasSkill(3) && !shieldReady()) b.push(`<button class="hintbtn" onclick="useShield()">🛡️ 开护盾</button>`)
+  return b.length ? `<div class="skillbar"><div class="small">${petNow().face} 小樱的本领（每种每天只能用 1 次，用了小樱降 1 级）</div>${b.join('')}</div>` : ''
 }
 function toggleMusicQuiz() { S.music = !S.music; save(); if (S.music) { audio(); Music.play() } else Music.stop(); const b = document.querySelector('.mus'); if (b) b.textContent = S.music ? '🎵' : '🔇' }
 const heartsHtml = () => Array.from({ length: G.maxHearts || 3 }, (_, i) => `<span class="${i < G.hearts ? '' : 'off'}">❤️</span>`).join('')
@@ -748,7 +836,7 @@ function oniAttack() {
 
 // ---------- 判分和反馈 ----------
 const praiseList = c => c >= 5 ? ['太厉害了！', '停不下来！', '数学小天才！', '薇薇无敌！'] : c >= 3 ? ['真棒！', '越来越快了！', '漂亮！', '薇薇好厉害！'] : ['答对了！', '正确！', '好样的！']
-const shieldReady = () => G && G.mode === 'level' && G.shield > 0
+const shieldReady = () => !!G && G.mode === 'level' && G.shieldQ === G.i
 function submit(ok, given, el) {
   if (G.mode === 'test' && G.rec.length > G.i) return // 防止同一题交两次
   G.locked = true
@@ -759,7 +847,7 @@ function submit(ok, given, el) {
   // ---- 小测验：不马上告诉对错，像真正考试一样 ----
   if (G.mode === 'test') {
     G.rec.push({ q, ok, given })
-    if (ok) { G.right++; G.score += hard ? PT_HARD : PT_MID; addXp(1) }
+    if (ok) { G.right++; G.score += hard ? PT_HARD : PT_MID; addXp(1); G.coins += earn(hard ? COIN.hard : COIN.mid) }
     SFX.tap(); save()
     setTimeout(() => { if (!G || G.mode !== 'test') return; G.i++; G.i >= G.qs.length ? finishTest('done') : renderQ() }, 350)
     return
@@ -771,11 +859,7 @@ function submit(ok, given, el) {
   if (ok) {
     G.right++; G.combo++; G.maxCombo = Math.max(G.maxCombo, G.combo)
     S.bestCombo = Math.max(S.bestCombo, G.combo)
-    let gain = (hard ? 20 : 10) + Math.min(G.combo - 1, 5) * 2
-    if (G.boss) gain *= 2
-    if (G.mode === 'wrong' || G.mode === 'drill') gain = 5
-    if (hasSkill(4)) gain = Math.round(gain * 1.5)
-    if (fedToday()) gain = Math.round(gain * 1.2)
+    let gain = earn(G.mode === 'wrong' || G.mode === 'drill' ? 1 : (hard ? COIN.hard : COIN.mid) * (G.boss ? 2 : 1))
     G.coins += gain
     const evo = addXp(1); if (evo) G.evo = evo
     SFX.good(G.combo); vibrate(15)
@@ -784,15 +868,15 @@ function submit(ok, given, el) {
       slashFx(G.combo)
       const hb = document.getElementById('hpBar'); if (hb) hb.style.width = G.hp + '%'
     }
-    floatText(`+${gain}💰`, rect.left + rect.width / 2, rect.top)
+    floatText(gain ? `+${gain}💰` : '今日金币已满', rect.left + rect.width / 2, rect.top)
     const pl = praiseList(G.combo)
     fb.className = 'feedback good show'
     fb.innerHTML = `<div class="t">✅ ${G.boss ? SKILL_NAME(G.combo) + '！' : pl[Math.floor(Math.random() * pl.length)]} ${G.combo >= 2 ? `<span class="combo pop">🔥${G.combo}连对</span>` : ''}</div>`
     const c = document.getElementById('combo'); if (c) { c.textContent = G.combo >= 2 ? `🔥${G.combo}连对` : ''; c.classList.remove('pop'); void c.offsetWidth; c.classList.add('pop') }
     setTimeout(next, G.combo >= 3 ? 800 : 1000)
   } else if (shieldReady()) {
-    // ---- 算算龙的护盾：这次不算错，再答一次 ----
-    G.shield = 0
+    // ---- 小樱的护盾：这次不算错，再答一次 ----
+    G.shieldQ = -1
     addWrong(q)
     SFX.shield(); vibrate(20)
     fb.className = 'feedback good show'
@@ -804,7 +888,7 @@ function submit(ok, given, el) {
     if (G.mode === 'wrong') bumpWrong(q)
     SFX.bad(); vibrate([40, 40, 40])
     const card = document.getElementById('qcard'); card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake')
-    if (G.boss) { G.hearts--; oniAttack(); const hs = document.getElementById('hearts'); hs.innerHTML = heartsHtml(); hs.classList.add('hit') }
+    if (G.boss) { G.hearts--; if (G.extraHeart) { G.extraHeart = false; useSkill(4); setTimeout(() => toast(`👸 樱之心挡了一下！小樱降到 ${S.petLv} 级`), 600) } oniAttack(); const hs = document.getElementById('hearts'); hs.innerHTML = heartsHtml(); hs.classList.add('hit') }
     fb.className = 'feedback bad show'
     fb.innerHTML = `<div class="t">❌ 没关系，看看怎么做</div>
       ${given ? `<div class="yours">你的答案：${showA(q, given)}</div>` : ''}
@@ -844,11 +928,11 @@ function masterWrong(h) {
 // ---------------- 闯关结算 ----------------
 function finishLevel() {
   const n = G.qs.length, rate = G.right / n, now = new Date()
-  let stars = 0, bonus = 0, title, sub, rankUp = null
+  let stars = 0, title, sub, rankUp = null
   if (G.mode === 'level') {
-    stars = G.boss ? (G.hearts <= 0 ? 0 : Math.min(3, G.hearts)) : rate >= 0.9 ? 3 : rate >= 0.7 ? 2 : rate >= 0.6 ? 1 : 0
+    stars = G.boss ? (G.hearts <= 0 ? 0 : G.hearts >= G.maxHearts ? 3 : 2) : rate >= 0.9 ? 3 : rate >= 0.7 ? 2 : rate >= 0.6 ? 1 : 0
     const id = lvId(G.u, G.l), old = S.stars[id] || 0, r0 = rankNow()
-    if (stars > old) { bonus = (stars - old) * 20; S.stars[id] = stars }
+    if (stars > old) S.stars[id] = stars
     if (stars === 3) wk('star3')
     if (G.boss && stars > 0) { wk('boss'); S.bossKills++ }
     if (G.right === n) wk('perfect')
@@ -857,7 +941,6 @@ function finishLevel() {
   wk('combo', G.maxCombo, true)
   let drillOk = false
   if (G.mode === 'drill') { drillOk = G.right === n; if (drillOk) masterWrong(G.target) }
-  S.coins += G.coins + bonus
   const badges = checkBadges(); save()
   const pass = G.mode === 'wrong' || G.mode === 'drill' ? true : stars > 0, perfect = G.mode === 'level' && G.right === n
   if (G.mode === 'wrong') { title = '复习完成！'; sub = `答对 ${G.right}/${n} 题<br><span class="small">想把错题消灭掉，要用 🎯 专项训练：类似的 ${DRILL_N} 题全对才算真正学会</span>` }
@@ -872,7 +955,7 @@ function finishLevel() {
   h += `<div class="res-date">📅 ${dateCN(now)} ${timeStr(now)}</div>`
   if (G.mode === 'level') h += `<div class="bigstars">${[0, 1, 2].map(i => `<span class="${i < stars ? '' : 'off'}">⭐</span>`).join('')}</div>`
   if (rankUp) h += `<div class="newbadge rankup">⚔️ 剑士阶级升级！现在是「${rankUp}」级剑士</div>`
-  h += `<div class="stats"><span class="chip">💰 +${G.coins + bonus}</span><span class="chip">🔥 最高${G.maxCombo}连对</span>${bonus ? `<span class="chip">新星星奖励 +${bonus}</span>` : ''}</div>`
+  h += `<div class="stats"><span class="chip">💰 +${G.coins}${coinLeft() ? '' : '（今日已满）'}</span><span class="chip">🔥 最高${G.maxCombo}连对</span></div>`
   badges.forEach(b => { h += `<div class="newbadge">🎖️ 获得新徽章：${b.i} ${b.n}（${b.d}）</div>` })
   if (wkReady()) h += `<div class="newbadge" onclick="go('week')" style="cursor:pointer">🏆 有每周挑战的奖励可以领啦！点这里去领</div>`
   h += '<div class="acts">'
@@ -901,11 +984,16 @@ function renderTestSetup() {
     · 一共 <b>${TEST_MID + TEST_HARD}</b> 题，限时 <b>${TEST_MIN} 分钟</b>，满分 <b>100 分</b><br>
     · 中等题 ${TEST_MID} 道，每道 ${PT_MID} 分；难题 ${TEST_HARD} 道，每道 ${PT_HARD} 分<br>
     · 像真正考试一样：做完才公布成绩，然后可以看每道错题的讲解<br>
-    · 时间到了会自动交卷</div></div>`
+    · 时间到了会自动交卷<br>
+    · 每天最多测 <b>${TEST_PER_DAY} 次</b>；<b>连续 3 次满分</b>奖励 <b>${COIN.testStreak}💰</b>（每周能拿 1 次）</div></div>`
+  ensureWeek()
+  const left = testLeft()
+  h += `<div class="card statrow"><div><b>${left}/${TEST_PER_DAY}</b><span>今天还能测</span></div><div><b>${S.perfStreak}/3</b><span>连续满分</span></div><div><b>${S.week.streak ? '已拿 ✔' : COIN.testStreak + '💰'}</b><span>本周满分奖金</span></div></div>`
   h += `<div class="h2">选择要考的单元 <span class="small">（可多选）</span></div>
     <div class="selbtns"><button class="btn sm ghost" onclick="selAll(true)">全选</button><button class="btn sm ghost" onclick="selAll(false)">全不选</button></div>
     <div class="ugrid">${UNITS.map((U, u) => `<button class="usel ${sel.includes(u) ? 'on' : ''}" style="--c:${U.color}" onclick="selUnit(${u})"><span class="ck">${sel.includes(u) ? '✔' : ''}</span><span class="ui">${U.icon}</span><span class="un">${U.label}<br><b>${U.name}</b></span></button>`).join('')}</div>`
-  h += `<button class="btn big-start" ${sel.length ? '' : 'disabled'} onclick="startTest()">🚀 开始测验（已选 ${sel.length} 个单元）</button>`
+  h += left > 0 ? `<button class="btn big-start" ${sel.length ? '' : 'disabled'} onclick="startTest()">🚀 开始测验（已选 ${sel.length} 个单元）</button>`
+    : `<button class="btn big-start" disabled>今天已经测了 ${TEST_PER_DAY} 次，明天再来吧 🌙</button>`
   if (S.tests.length) {
     h += `<div class="h2">📜 历史成绩</div><div class="card hist">` + S.tests.slice().reverse().slice(0, 15).map(t =>
       `<div class="hrow"><span class="hd">${t.date}</span><span class="hs ${rating(t.score).cls}">${t.score}分</span><span class="ht">${rating(t.score).name}</span></div>`).join('') + '</div>'
@@ -922,8 +1010,14 @@ function rating(s) {
 }
 let timerId = null
 function stopTimer() { clearInterval(timerId); timerId = null }
+function testLeft() {
+  const d = today()
+  if (S.testDay.date !== d) S.testDay = { date: d, n: 0 }
+  return Math.max(0, TEST_PER_DAY - S.testDay.n)
+}
 function startTest() {
-  if (!S.testUnits.length) return
+  if (!S.testUnits.length || testLeft() <= 0) return
+  S.testDay.n++
   setTheme('test'); Music.play('focus')
   const qs = makeSet(S.testUnits, TEST_MID, TEST_HARD, { avoid: new Set(S.recentQ) })
   S.recentQ = S.recentQ.concat(qs.map(q => q.hid)).slice(-600); save()
@@ -949,7 +1043,17 @@ function finishTest(why) {
   if (S.tests.length > 50) S.tests.shift()
   g.rec.forEach(r => { if (!r.ok) addWrong(r.q) })
   if (g.score >= 80) wk('test80')
-  S.coins += g.score
+  // 连续 3 次满分：每周奖 1 次
+  let streakMsg = ''
+  ensureWeek()
+  if (g.score >= 100) {
+    S.perfStreak++
+    if (S.perfStreak >= 3) {
+      S.perfStreak = 0
+      if (!S.week.streak) { S.week.streak = true; S.coins += COIN.testStreak; streakMsg = `🔥 连续 3 次满分！奖励 ${COIN.testStreak}💰` }
+      else streakMsg = '🔥 又连续 3 次满分！（这周的奖金已经拿过啦，下周再来）'
+    } else streakMsg = `🔥 连续满分 ${S.perfStreak}/3，再满分 ${3 - S.perfStreak} 次有大奖！`
+  } else S.perfStreak = 0
   const badges = checkBadges(); save()
   G = null; setTheme(''); Music.play('calm')
   const wrongs = g.rec.filter(r => !r.ok)
@@ -963,7 +1067,8 @@ function finishTest(why) {
       <div class="cert-info">考试范围：${unitsTxt}<br>答对 ${g.right}/${g.qs.length} 题 · 用时 ${Math.floor(used / 60)}分${used % 60}秒</div>
       <div class="cert-say">${rt.say}</div>
     </div>
-    <div class="small">📸 可以截图保存这张成绩单哦　·　获得 💰 ${g.score} 金币</div>`
+    <div class="small">📸 可以截图保存这张成绩单哦　·　答对得 💰 ${g.coins} 金币</div>`
+  if (streakMsg) h += `<div class="newbadge">${streakMsg}</div>`
   badges.forEach(b => { h += `<div class="newbadge">🎖️ 获得新徽章：${b.i} ${b.n}（${b.d}）</div>` })
   if (wrongs.length) {
     h += `<div class="h2" style="text-align:left">🔍 错题讲解（${wrongs.length} 道，已放进错题本）</div>`
@@ -1022,7 +1127,7 @@ function renderWeek() {
     return `<div class="wt ${got ? 'got' : ''}"><span class="wi">${t.i}</span><div class="info"><b>${t.n}</b><div class="bar"><i style="width:${v / t.goal * 100}%"></i></div><span class="small">${v}/${t.goal}</span></div>
       ${got ? '<span class="small">已领 ✔</span>' : `<button class="btn sm ${ok ? 'gold' : ''}" ${ok ? '' : 'disabled'} onclick="claimWeek('${id}')">${t.coin}💰</button>`}</div>`
   }).join('') + '</div>'
-  h += `<div class="card chest ${W.chest ? 'opened' : allClaimed ? 'ready' : ''}"><div class="ci">${W.chest ? '🎊' : '🎁'}</div><div class="info"><b>本周宝箱</b><div class="small">${W.chest ? '这周的宝箱已经打开啦！下周一还有新的' : `6 个任务奖励全部领完就能打开：${CHEST_COIN}💰 + 一件神秘装扮或花纹（${W.claimed.length}/6）`}</div></div>
+  h += `<div class="card chest ${W.chest ? 'opened' : allClaimed ? 'ready' : ''}"><div class="ci">${W.chest ? '🎊' : '🎁'}</div><div class="info"><b>本周宝箱</b><div class="small">${W.chest ? '这周的宝箱已经打开啦！下周一还有新的' : `6 个任务奖励全部领完就能打开：${CHEST_COIN}💰（${W.claimed.length}/6）`}</div></div>
     ${W.chest ? '' : `<button class="btn ${allClaimed ? 'red' : ''}" ${allClaimed ? '' : 'disabled'} onclick="openChest()">开箱</button>`}</div>`
   const last = S.weekHist[S.weekHist.length - 1]
   if (last) h += `<div class="small" style="text-align:center;margin:-4px 0 8px">上周完成了 ${last.done}/6 个任务${last.chest ? '，打开了宝箱 🎊' : ''}</div>`
@@ -1042,11 +1147,7 @@ function claimWeek(id) {
 function openChest() {
   if (S.week.chest || S.week.claimed.length < S.week.tasks.length) return
   S.week.chest = true; S.coins += CHEST_COIN
-  const pool = ACC.map(a => ['acc', a]).concat(PAT.map(a => ['pat', a])).filter(([, a]) => !S.owned.includes(a.id))
-  let gift = ''
-  if (pool.length) { const [kind, a] = pool[Math.floor(Math.random() * pool.length)]; S.owned.push(a.id); gift = kind === 'acc' ? `${a.i} ${a.n}` : `🎴 ${a.n}` }
-  else { S.coins += 200; gift = '额外 200 金币（东西都集齐啦！）' }
-  checkBadges(); save(); SFX.win(); setTimeout(() => fireworks('宝箱打开啦！', `${CHEST_COIN}金币 + ${gift}`, 4000), 200)
+  checkBadges(); save(); SFX.win(); setTimeout(() => fireworks('宝箱打开啦！', `获得 ${CHEST_COIN} 金币`, 4000), 200)
   renderWeek()
 }
 
@@ -1091,7 +1192,65 @@ function fireworks(text, sub, ms = 5000) {
   requestAnimationFrame(frame)
 }
 
+// ---------------- 游戏说明（给薇薇看的） ----------------
+function showHelp() {
+  SFX.tap()
+  modal(`<h3>📖 游戏说明</h3><div class="help">
+    <p><b>🗺️ 闯关</b>：每个单元 3 关 + 1 只鬼。答对 6 题过关，全对拿 3 颗⭐。</p>
+    <p><b>⚔️ 斩鬼</b>：只有 <b>1 颗❤️</b>，错一题就输！赢了金币翻倍。</p>
+    <p><b>💰 金币</b>：答对 1 题 1 个，难题 2 个。每天最多赚 ${COIN.dayCap} 个。</p>
+    <p><b>🎁 每天</b>：答对 ${DAILY_GOAL} 题，领 ${COIN.daily}💰。</p>
+    <p><b>📝 小测验</b>：每天最多 ${TEST_PER_DAY} 次。<b>连续 3 次满分</b>，领 ${COIN.testStreak}💰（每周 1 次）。</p>
+    <p><b>🏆 每周</b>：每周一有 6 个任务，每个 ${COIN.weekTask}💰；全做完开宝箱 ${CHEST_COIN}💰。</p>
+    <p><b>🌸 小樱</b>：花金币升级，最高 4 级，每升 1 级学会 1 个本领。<br>本领每种<b>每天只能用 1 次</b>，用了小樱会<b>降 1 级</b>，要省着用哦！</p>
+    <p><b>🛍️ 商店</b>：给小樱买装扮和花纹。全部买齐后，才能买 <b>👛 ${WALLET.n}</b>（每周 1 次）！</p>
+    <p class="hl">💡 一整周每天都认真做，再拿到测验满分奖，金币刚好够买下爸爸的钱包！</p></div>
+    <button class="btn" onclick="closeModal()">知道啦！</button>`)
+}
+
+// ---------------- 家长体验模式（网址后面加 ?demo=1，单独存档，不影响薇薇） ----------------
+function demoBar() {
+  if (!DEMO) return
+  const b = document.createElement('div'); b.className = 'demo-banner'; b.innerHTML = '🧪 体验模式（不影响薇薇的存档）· 点右下角 🧪 看所有结局'; document.body.prepend(b)
+  const f = document.createElement('button'); f.className = 'demo-fab'; f.textContent = '🧪'; f.onclick = demoPanel; document.body.appendChild(f)
+}
+function demoPanel() {
+  const B = (fn, t) => `<button class="btn sm ghost" onclick="closeModal();${fn}">${t}</button>`
+  modal(`<h3>🧪 家长体验面板</h3><div class="demo-grid">
+    <div class="dg">💰 金币和小樱</div>${B('demo.coins()', '+1000 金币')}${B('demo.pet(4)', '小樱升满 4 级')}${B('demo.pet(0)', '小樱回到 0 级')}${B('demo.evolve()', '看升级动画')}${B('demo.resetDay()', '重置今天的限制')}
+    <div class="dg">🛍️ 商店和钱包</div>${B('demo.ownAll()', '买齐全部装扮')}${B('showWallet()', '看兑换券')}${B("go('shop')", '去商店')}
+    <div class="dg">🏆 每周挑战</div>${B('demo.weekAll()', '完成全部周任务')}${B('demo.chest()', '看开宝箱')}
+    <div class="dg">⚔️ 闯关结局</div>${B('demo.boss(true)', '斩鬼胜利')}${B('demo.boss(false)', '斩鬼失败')}${B('demo.perfect()', '满分·薇薇真棒')}${B('demo.allBoss()', '9 只鬼全打败')}
+    <div class="dg">📝 小测验结局</div>${B('demo.test(100)', '100 分')}${B('demo.test(94)', '90+ 分')}${B('demo.test(70)', '60+ 分')}${B('demo.test(40)', '不及格')}${B('demo.streak()', '连续 3 次满分')}
+    <div class="dg">其他</div>${B('showHelp()', '看游戏说明')}${B('demo.clear()', '清空体验存档')}
+  </div><p class="small"><a class="lnk" href="./">← 回到薇薇的正常模式</a></p><button class="btn" onclick="closeModal()">关闭</button>`)
+}
+const demo = {
+  coins() { S.coins += 1000; save(); render(); toast('+1000 金币') },
+  pet(n) { S.petLv = n; S.maxLv = Math.max(S.maxLv, n); checkBadges(); save(); render(); toast(`小樱现在 ${n} 级`) },
+  evolve() { if (S.petLv < 4) { S.petLv++; S.maxLv = Math.max(S.maxLv, S.petLv); save() } render(); showEvolve(petNow()) },
+  resetDay() { S.testDay = { date: '', n: 0 }; S.skillDay = { date: '', used: [] }; S.coinDay = { date: '', n: 0 }; S.daily.claimed = false; save(); render(); toast('今天的测验次数、本领、金币上限都重置了') },
+  ownAll() { S.owned = ACC.concat(PAT).map(a => a.id); S.coins = Math.max(S.coins, WALLET.p); checkBadges(); save(); go('shop') },
+  weekAll() { ensureWeek(); S.week.tasks.forEach(id => { S.week.c[id] = WEEK_POOL.find(t => t.id === id).goal }); save(); go('week') },
+  chest() { ensureWeek(); S.week.claimed = S.week.tasks.slice(); S.week.chest = false; go('week'); openChest() },
+  fake(o) { G = Object.assign({ mode: 'level', u: 0, l: 3, boss: true, qs: Array(12).fill({}), right: 12, hearts: 1, maxHearts: 1, coins: 32, maxCombo: 12, combo: 0, rec: [] }, o) },
+  boss(win) { this.fake(win ? {} : { right: 7, hearts: 0, coins: 14, maxCombo: 5 }); setTheme('boss'); finishLevel() },
+  perfect() { this.fake({ l: 0, boss: false, qs: Array(10).fill({}), right: 10, hearts: 0, coins: 13, maxCombo: 10 }); finishLevel() },
+  allBoss() { UNITS.forEach((_, u) => { for (let l = 0; l < 4; l++) S.stars[lvId(u, l)] = 3 }); S.bossKills = Math.max(S.bossKills, 9); checkBadges(); save(); go('map'); toast('全部关卡 3 星，剑士阶级：甲') },
+  test(score) {
+    const qs = makeSet(UNITS.map((_, i) => i), TEST_MID, TEST_HARD, {})
+    G = { mode: 'test', qs, rec: [], right: 0, score: 0, coins: 0, units: UNITS.map((_, i) => i), t0: Date.now() - 18 * 60000 }
+    // 从最后往前扣分，凑出想看的分数
+    const ok = qs.map(() => true); let s = 100
+    for (let i = qs.length - 1; i >= 0 && s > score; i--) { ok[i] = false; s -= qs[i].diff === 'hard' ? PT_HARD : PT_MID }
+    qs.forEach((q, i) => { G.rec.push({ q, ok: ok[i], given: ok[i] ? q.answer : '?' }); if (ok[i]) { G.right++; G.coins += q.diff === 'hard' ? COIN.hard : COIN.mid } })
+    G.score = s; finishTest('done')
+  },
+  streak() { ensureWeek(); S.week.streak = false; S.perfStreak = 2; this.test(100) },
+  clear() { if (!confirm('清空体验存档，从头开始？')) return; localStorage.removeItem(KEY); location.reload() },
+}
+
 ensureDaily(); ensureWeek(); save()
-render()
+render(); demoBar()
 const nn = document.getElementById('nextNode')
 if (nn && totalStars() > 0) setTimeout(() => nn.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)

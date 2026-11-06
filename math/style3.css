@@ -118,3 +118,35 @@
 .chest.ready { border-style: solid; border-color: #ff9f1c; animation: pulse 1.4s infinite; }
 .chest.opened { opacity: .75; }
 .fig.ruler { max-width: 100%; }
+
+/* ===== 第四版：小樱、本领、钱包、说明、体验模式 ===== */
+.lvdots{display:flex;gap:5px;margin:4px 0}
+.lvdots i{width:14px;height:14px;border-radius:50%;background:#eee;border:2px solid #f3b6c8}
+.lvdots i.on{background:#ff8fb1;border-color:#ff8fb1}
+.sk.used{opacity:.45;text-decoration:line-through;background:#eee;color:#888}
+.skillbar{background:#fff5f8;border:2px dashed #ffb6cb;border-radius:14px;padding:8px 10px;margin:10px 0;text-align:center}
+.skillbar .small{margin-bottom:6px}
+.skillbar .hintbtn{margin:3px}
+.peek{background:#fffbe6;border:2px solid #ffd666;border-radius:12px;padding:10px 12px;margin:8px 0;font-size:15px;line-height:1.6}
+.card.wallet{display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,#fff7e0,#ffe3ec);border:2px solid #ffc94d}
+.card.wallet.locked{filter:grayscale(.6);opacity:.8}
+.card.wallet .wi{font-size:40px}
+.card.wallet .info{flex:1;min-width:0}
+.ticket{border:3px dashed #e8505b;border-radius:16px;padding:16px 12px;margin-bottom:10px;background:linear-gradient(135deg,#fff8e7,#ffe9ef);position:relative}
+.ticket .t1{font-size:24px;font-weight:900;color:#e8505b;letter-spacing:4px}
+.ticket .t2{font-size:20px;font-weight:800;margin:8px 0}
+.ticket .t3{font-size:14px;color:#666}
+.ticket .t4{margin-top:10px;font-size:15px;line-height:1.6}
+.ticket .t5{margin-top:8px;color:#999;font-size:13px}
+.helpchip{background:#e9f3ff;color:#2a6fd6;border:none;cursor:pointer;font:inherit}
+.help{text-align:left;font-size:15px;line-height:1.65;max-height:62vh;overflow:auto}
+.help p{margin:0 0 8px}
+.help .hl{background:#fff5d6;border-radius:10px;padding:8px 10px}
+.demo-banner{position:relative;z-index:50;background:#7a4cff;color:#fff;text-align:center;font-size:12px;padding:3px 0;pointer-events:none}
+.demo-fab{position:fixed;right:14px;bottom:86px;z-index:60;width:52px;height:52px;border-radius:50%;border:none;background:#7a4cff;color:#fff;font-size:26px;box-shadow:0 4px 12px rgba(0,0,0,.25);cursor:pointer}
+.demo-grid{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-height:60vh;overflow:auto;text-align:left}
+.demo-grid .dg{width:100%;font-weight:800;margin-top:6px;font-size:14px}
+.demo-grid .btn{margin:0}
+.topbar{gap:5px}
+.topbar .title{font-size:17px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar .chip{padding:5px 7px;font-size:13px;white-space:nowrap;flex-shrink:0}
