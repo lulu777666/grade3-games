@@ -38,7 +38,7 @@ function opts4(ans, cands, more) {
 
 // ---------------- 题目构造 ----------------
 const choice = (diff, q, ans, options, tip, fig, keep) => ({ diff, type: 'choice', q, answer: String(ans), options: options.map(String), tip, fig, keep: !!keep })
-const input = (diff, q, ans, tip, fig, unit) => ({ diff, type: 'input', q, answer: String(ans), tip, fig, unit })
+const input = (diff, q, ans, tip, fig, suffix) => ({ diff, type: 'input', q, answer: String(ans), tip, fig, suffix })
 const cmpQ = (diff, q, a, b, tip) => choice(diff, q, a > b ? '>' : a < b ? '<' : '=', ['>', '<', '='], tip, null, true)
 function vertical(diff, a, b, op, tip) {
   const ans = op === '+' ? a + b : op === '-' ? a - b : a * b
@@ -310,7 +310,7 @@ function u2Enough() {
 // ============================================================
 //  第3单元 测量
 // ============================================================
-function u3Conv() {
+function u3Conv(only) {
   const list = [
     () => { const a = R(2, 9), b = R(1, 9); return [`${a}厘米${b}毫米 =（　）毫米`, a * 10 + b, `1厘米 = 10毫米，${a}厘米 = ${a * 10}毫米，\n${a * 10} + ${b} = ${a * 10 + b}（毫米）。`] },
     () => { const a = R(2, 9), b = R(1, 9); return [`${a * 10 + b}毫米 = ${a}厘米（　）毫米`, b, `${a}厘米 = ${a * 10}毫米，\n${a * 10 + b} − ${a * 10} = ${b}（毫米）。`] },
@@ -323,11 +323,11 @@ function u3Conv() {
     () => { const a = R(2, 8) * 100; return [`1千米 − ${a}米 =（　）米`, 1000 - a, `先统一单位：1千米 = 1000米，\n1000 − ${a} = ${1000 - a}（米）。`] },
     () => { const a = R(2, 8) * 100; return [`1千克 − ${a}克 =（　）克`, 1000 - a, `先统一单位：1千克 = 1000克，\n1000 − ${a} = ${1000 - a}（克）。`] },
   ]
-  const [q, a, tip] = pick(list)()
+  const [q, a, tip] = pick(only ? list.filter((_, i) => only.includes(i)) : list)()
   return input('mid', q, a, tip)
 }
-function u3Cmp() {
-  const t = R(0, 3)
+function u3Cmp(force) {
+  const t = force != null ? force : R(0, 3)
   if (t === 0) { const a = R(2, 6), b = a * 1000 + pick([-100, 0, 50, -10]); return cmpQ('mid', `${a}千米 ○ ${b}米`, a * 1000, b, `先统一单位：${a}千米 = ${a * 1000}米，\n再比较 ${a * 1000}米 和 ${b}米。`) }
   if (t === 1) { const a = R(2, 9), c = R(1, 9), b = a * 10 + c + pick([-2, 0, 3]); return cmpQ('mid', `${a}厘米${c}毫米 ○ ${b}毫米`, a * 10 + c, b, `${a}厘米${c}毫米 = ${a * 10 + c}毫米，\n再和 ${b}毫米 比。`) }
   if (t === 2) { const a = R(2, 6), b = a * 1000 + pick([-500, 0, 200]); return cmpQ('mid', `${a}吨 ○ ${b}千克`, a * 1000, b, `${a}吨 = ${a * 1000}千克，\n再和 ${b}千克 比。`) }
@@ -341,12 +341,12 @@ function u3Order() {
   if (uniq(shown).length < 4) return u3Order()
   return orderQ('mid', '按从短到长的顺序，依次点一点', shown, `先都换成“米”：\n${sorted.map((v, i) => `${shown[i]} = ${v}米`).join('\n')}\n所以：${shown.join(' < ')}`)
 }
-function u3Unit() {
+function u3Unit(kind) {
   const len = [['一枚1元硬币厚约2（ ）', '毫米'], ['一支铅笔长约18（ ）', '厘米'], ['课桌高约7（ ）', '分米'], ['黑板长约4（ ）', '米'], ['从学校到公园约3（ ）', '千米'],
     ['一本数学书厚约6（ ）', '毫米'], ['三年级同学身高约130（ ）', '厘米'], ['汽车每小时行驶60（ ）', '千米'], ['教室门高约2（ ）', '米'], ['数学书长约2（ ）', '分米']]
   const wt = [['一头大象重约5（ ）', '吨'], ['一个鸡蛋重约50（ ）', '克'], ['三年级同学体重约30（ ）', '千克'], ['一辆卡车能装4（ ）货物', '吨'], ['一个苹果重约200（ ）', '克'], ['一袋大米重10（ ）', '千克']]
   const L = ['毫米', '厘米', '分米', '米', '千米'], W = ['克', '千克', '吨']
-  if (Math.random() < 0.6) {
+  if (kind === "len" || (kind !== "wt" && Math.random() < 0.6)) {
     const [q, a] = pick(len)
     const others = shuffle(L.filter(x => x !== a)).slice(0, 3)
     return choice('mid', `在括号里填上合适的单位：${q}`, a, L.filter(x => x === a || others.includes(x)),
@@ -416,6 +416,15 @@ function u4MaxMin() {
     ['最小的四位数比最大的三位数多多少？', 1, '最小的四位数是 1000，最大的三位数是 999，\n1000 − 999 = 1。'],
     ['最大的两位数与最小的三位数的和是多少？', 199, '最大的两位数是 99，最小的三位数是 100，\n99 + 100 = 199。'],
     ['最大的三位数与最大的两位数的差是多少？', 900, '最大的三位数是 999，最大的两位数是 99，\n999 − 99 = 900。']]
+  // 组数题：现场生成，避免讲解出错
+  if (Math.random() < 0.55) {
+    let d; do { d = shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]).slice(0, 3) } while (d.filter(x => x).length < 2)
+    const big = d.slice().sort((a, b) => b - a), small = d.slice().sort((a, b) => a - b)
+    if (small[0] === 0) { const k = small.findIndex(x => x); [small[0], small[k]] = [small[k], small[0]] }
+    const B = +big.join(''), S2 = +small.join(''), plus = Math.random() < 0.5
+    return input('hard', `用 ${d.join('、')} 三个数字组成最大的三位数和最小的三位数（每个数字只用一次），它们的${plus ? '和' : '差'}是多少？`, plus ? B + S2 : B - S2,
+      `最大的三位数：把大的数字放在高位，是 ${B}；\n最小的三位数：把小的数字放在高位${d.includes(0) ? '，但 0 不能放在百位' : ''}，是 ${S2}；\n${plus ? `${B} + ${S2} = ${B + S2}` : `${B} − ${S2} = ${B - S2}`}。`)
+  }
   const [q, a, t] = pick(list)
   return input('hard', q, a, t)
 }
@@ -458,7 +467,8 @@ function u5More() {
     `第1步 先求小红的 ${k} 倍：${b} × ${k} = ${b * k}（本）；\n第2步 再多 ${c} 本：${b * k} + ${c} = ${b * k + c}（本）。`, null, '本')
 }
 function u5Rev() {
-  const x = R(3, 9), k = R(2, 6), j = R(2, 5)
+  const x = R(3, 9), k = R(2, 6)
+  let j = R(2, 7); while (j === k) j = R(2, 7)
   return input('hard', `一个数的 ${k} 倍是 ${x * k}，这个数的 ${j} 倍是多少？`, x * j,
     `第1步 先求这个数：${x * k} ÷ ${k} = ${x}；\n第2步 再求它的 ${j} 倍：${x} × ${j} = ${x * j}。`)
 }
@@ -477,7 +487,8 @@ function u6Vert() {
   return vertical('mid', a, k, '*')
 }
 function u6Oral() {
-  const list = [() => [25, 4], () => [125, 8], () => [R(12, 24), R(3, 4)], () => [R(1, 9) * 10 + 5, 2], () => [R(2, 9) * 100, R(3, 9)], () => [R(11, 33), 3]]
+  const list = [() => pick([[25, 4], [125, 8], [25, 8], [125, 4], [50, 6], [250, 4]]), () => [R(12, 24), R(3, 4)], () => [R(1, 9) * 10 + 5, 2],
+    () => [R(2, 9) * 100, R(3, 9)], () => [R(11, 33), 3], () => [R(13, 19), R(5, 6)], () => [R(2, 9) * 10, R(4, 9)]]
   const [a, k] = pick(list)()
   return input('mid', `口算：${a} × ${k} =`, a * k,
     a % 100 === 0 ? `先算 ${a / 100} × ${k} = ${a / 100 * k}，再在末尾添两个 0，得 ${a * k}。` :
@@ -546,7 +557,14 @@ function u7Judge() {
     ['周长相等的两个长方形，形状一定相同。', '错', '比如长5宽1、长4宽2，周长都是12，但形状不同。'],
     ['有 4 个直角的四边形一定是正方形。', '错', '长方形也有 4 个直角，但它的 4 条边不一定都相等。'],
     ['正方形的边长扩大到原来的 2 倍，周长也扩大到原来的 2 倍。', '对', '周长 = 边长 × 4，边长变成2倍，周长也变成2倍。'],
-    ['长方形的周长一定比正方形的周长长。', '错', '要看具体大小：长3宽1的长方形周长8，边长5的正方形周长20。']]
+    ['长方形的周长一定比正方形的周长长。', '错', '要看具体大小：长3宽1的长方形周长8，边长5的正方形周长20。'],
+    ['长方形和正方形都是四边形。', '对', '它们都有4条直的边和4个角，所以都是四边形。'],
+    ['边长是 4 厘米的正方形，周长是 16 厘米。', '对', '正方形周长 = 边长 × 4 = 4 × 4 = 16（厘米）。'],
+    ['长方形的长是 6 厘米，宽是 4 厘米，周长是 10 厘米。', '错', '6 + 4 = 10 只是一条长加一条宽，周长 =（6 + 4）× 2 = 20（厘米）。'],
+    ['一个图形有 4 条边，它一定是四边形。', '错', '四边形的 4 条边必须是直的线段，而且要围成一个封闭的图形。'],
+    ['两个完全一样的正方形拼成一个长方形，长方形的周长等于两个正方形周长的和。', '错', '拼的时候有两条边合在一起藏到里面了，所以周长比两个正方形周长的和少了 2 条边。'],
+    ['用 4 根同样长的小棒可以围成一个正方形。', '对', '正方形 4 条边都相等，4 根同样长的小棒正好围成。'],
+    ['周长是 20 厘米的正方形，边长是 4 厘米。', '错', '边长 = 周长 ÷ 4 = 20 ÷ 4 = 5（厘米）。']]
   const [q, a, t] = pick(list)
   return choice('mid', '判断：' + q, a, ['对', '错'], `这句话是${a}的。\n${t}`, null, true)
 }
@@ -655,40 +673,123 @@ function u9Queue() {
 }
 
 // ============================================================
-//  单元表
+//  第三版新增的题（让每关的题更多样）
 // ============================================================
-const UNITS = [
-  { name: '时、分、秒', icon: '⏰', color: '#6c7cf5', mid: [u1Read, u1Set, u1Set, u1Conv, u1Cmp, u1Order, u1Pop], hard: [u1Elapsed, u1End, u1Start, u1Schedule, u1Race] },
-  { name: '万以内加减法（一）', icon: '➕', color: '#ff8a5c', mid: [u2Oral, u2Tens, u2Match, u2Est], hard: [u2Bus, u2More, u2Box, u2Enough] },
-  { name: '测量', icon: '📏', color: '#3fbf9f', mid: [u3Conv, u3Conv, u3Cmp, u3Order, u3Unit], hard: [u3Truck, u3Bridge, u3Rope, u3Animal] },
-  { name: '万以内加减法（二）', icon: '🧮', color: '#f2b134', mid: [u4Vert, u4Vert, u4Calc, u4Check], hard: [u4Zero, u4Books, u4Total, u4MaxMin, u4Shop] },
-  { name: '倍的认识', icon: '✖️', color: '#e86aa6', mid: [u5Basic, u5Fig, u5Match], hard: [u5Sum, u5More, u5Rev, u5Diff] },
-  { name: '多位数乘一位数', icon: '🚀', color: '#5aa9e6', mid: [u6Vert, u6Vert, u6Oral, u6Pop, u6Est], hard: [u6Zero, u6Word, u6Word, u6Box] },
-  { name: '长方形和正方形', icon: '🟦', color: '#8b6cf0', mid: [u7Peri, u7Peri, u7Wire, u7Judge], hard: [u7Join, u7Cut, u7Wall, u7Double] },
-  { name: '分数的初步认识', icon: '🍰', color: '#ff6f6f', mid: [u8Shade, u8Read, u8Cmp, u8Order, u8Calc], hard: [u8Calc3, u8Qty, u8Left, u8Who] },
-  { name: '数学广角——集合', icon: '⭕', color: '#2ec4b6', mid: [u9Total], hard: [u9Both, u9Only, u9Queue] },
-]
-
-const qKey = q => q.type + '|' + q.q + '|' + (q.fig || '') + (q.items ? JSON.stringify(q.items) : '')
-// 从若干单元里出题：nMid 道中等 + nHard 道难题（难题排在后面，像试卷一样由易到难）
-function makeSet(units, nMid, nHard) {
-  const out = [], seen = new Set()
-  const take = (kind, n) => {
-    let order = []
-    while (order.length < n) order = order.concat(shuffle(units))
-    let i = 0, guard = 0
-    while (i < n && guard++ < 400) {
-      const u = order[i], q = pick(UNITS[u][kind])()
-      const k = qKey(q)
-      if (seen.has(k)) continue
-      seen.add(k); q.unit = u
-      if (q.type === 'choice' && !q.keep) q.options = shuffle(q.options)
-      out.push(q); i++
-    }
-  }
-  take('mid', nMid); take('hard', nHard)
-  return out
+function u1Calc() {
+  if (Math.random() < 0.5) { const a = R(2, 11) * 5; return input('mid', `1时 − ${a}分 =（　）分`, 60 - a, `先统一单位：1时 = 60分，\n60 − ${a} = ${60 - a}（分）。`, null, '分') }
+  const a = R(2, 4), b = R(2, 11) * 5
+  return input('mid', `${a}分 − ${b}秒 =（　）秒`, a * 60 - b, `先统一单位：${a}分 = ${a} × 60 = ${a * 60}秒，\n${a * 60} − ${b} = ${a * 60 - b}（秒）。`, null, '秒')
 }
-const makeLevel = (unit, lv) => (lv === 3 ? makeSet([unit], 8, 4) : makeSet([unit], 7, 3))
+function u1Train() {
+  const h = R(7, 10), m = R(3, 10) * 5, dm = R(2, 11) * 5
+  let eh = h + 1, em = m + dm
+  if (em >= 60) { em -= 60; eh++ }
+  const ans = `1时${dm}分`
+  return choice('hard', `一列火车 ${hm(h, m)} 从车站开出，${hm(eh, em)} 到达终点。火车一共行驶了多长时间？`, ans,
+    opts4(ans, [`${eh - h}时${Math.abs(em - m)}分`, `1时${(dm + 10) % 60 || 5}分`, `2时${dm}分`], () => `1时${R(1, 11) * 5}分`),
+    `分两步数：\n从 ${hm(h, m)} 到 ${hm(h + 1, m)}，正好 1 时；\n从 ${hm(h + 1, m)} 到 ${hm(eh, em)}，是 ${dm} 分；\n合起来是 1时${dm}分。\n⚠️ 易错：不能直接拿两个时刻的“时”和“分”分别相减${em < m ? '，分不够减时要借 1 时当 60 分' : ''}。`)
+}
+function u2Fill() {
+  const a = R(25, 68), b = R(18, 99 - a), t = R(0, 2)
+  if (t === 0) return input('mid', `（　）+ ${b} = ${a + b}`, a, `求一个加数：和 − 另一个加数。\n${a + b} − ${b} = ${a}。\n检查：${a} + ${b} = ${a + b} ✔`)
+  if (t === 1) return input('mid', `（　）− ${b} = ${a}`, a + b, `求被减数：差 + 减数。\n${a} + ${b} = ${a + b}。\n检查：${a + b} − ${b} = ${a} ✔`)
+  return input('mid', `${a + b} −（　）= ${a}`, b, `求减数：被减数 − 差。\n${a + b} − ${a} = ${b}。\n检查：${a + b} − ${b} = ${a} ✔`)
+}
+function u2Chain() {
+  const a = R(32, 65), b = R(15, 34), c = R(12, a + b - 15)
+  return input('mid', `${a} + ${b} − ${c} =`, a + b - c, `从左往右一步一步算：\n${a} + ${b} = ${a + b}，\n${a + b} − ${c} = ${a + b - c}。`)
+}
+function u2Cmp() {
+  const a = R(28, 59), b = R(17, 39), c = a + b + pick([-3, -1, 0, 1, 2])
+  return cmpQ('mid', `${a} + ${b} ○ ${c}`, a + b, c, `先算左边：${a} + ${b} = ${a + b}，\n再和 ${c} 比较。`)
+}
+function u3Pop(kind) {
+  const sets = [['1米', ['10分米', '100厘米', '1000毫米'], ['10厘米', '100分米', '1千米', '100毫米', '1000厘米']],
+    ['1分米', ['10厘米', '100毫米'], ['10毫米', '100厘米', '1米', '1000毫米', '1厘米']],
+    ['1千米', ['1000米'], ['100米', '10000米', '1000厘米', '1000分米', '10千米']],
+    ['2千克', ['2000克'], ['200克', '20克', '2吨', '20000克', '2000千克']],
+    ['3吨', ['3000千克'], ['300千克', '30千克', '3000克', '30吨', '300克']],
+    ['1吨', ['1000千克'], ['100千克', '10千克', '1000克', '10吨', '100吨']], ['4千克', ['4000克'], ['400克', '40克', '4吨', '40千克', '4000千克']], ['6000克', ['6千克'], ['60千克', '600千克', '6吨', '60克', '6克']],
+    ['5厘米', ['50毫米'], ['5毫米', '500毫米', '50分米', '5分米', '500厘米']]]
+  const [t, yes, no] = pick(kind ? sets.filter(s => /克|吨/.test(s[0]) === (kind === "wt")) : sets), wt = /克|吨/.test(t)
+  return popQ('mid', `戳破所有和「${t}」一样${wt ? '重' : '长'}的气球`, yes.map(x => ({ t: x, ok: true })).concat(shuffle(no).slice(0, 6 - yes.length).map(x => ({ t: x, ok: false }))),
+    `${t} = ${yes.join(' = ')}\n记住这些进率：\n1米 = 10分米 = 100厘米 = 1000毫米\n1分米 = 10厘米，1厘米 = 10毫米\n1千米 = 1000米，1吨 = 1000千克，1千克 = 1000克`)
+}
+function u4Fill() {
+  const a = R(215, 548), b = R(136, 389)
+  if (Math.random() < 0.5) return input('mid', `（　）− ${b} = ${a}`, a + b, `求被减数：差 + 减数。\n${addSteps(a, b)}`)
+  return input('mid', `（　）+ ${b} = ${a + b}`, a, `求一个加数：和 − 另一个加数。\n${subSteps(a + b, b)}`)
+}
+function u4Est() {
+  const a = R(5, 9) * 100 + pick([-3, -2, 2, 3, 4]), b = R(1, 4) * 100 + pick([-2, -1, 1, 2]), ra = Math.round(a / 100) * 100, rb = Math.round(b / 100) * 100, ans = ra - rb
+  return choice('mid', `估一估：${a} − ${b} 的差大约是多少？`, ans, opts4(ans, [ans + 100, ans - 100, ra + rb], () => ans + 200),
+    `把数看成接近的整百数：${a} ≈ ${ra}，${b} ≈ ${rb}，\n${ra} − ${rb} = ${ans}，所以大约是 ${ans}。`)
+}
+function u4Find() {
+  const n = pick(NAMES)
+  if (Math.random() < 0.5) {
+    let a, b; do { a = R(235, 568); b = R(167, 399) } while (a + b >= 1000 || a % 10 + b % 10 < 10)
+    const ans = '十位没有加上个位进上来的 1'
+    return choice('hard', `${n} 算 ${a} + ${b} = ${a + b - 10}，错在哪里？`, ans, [ans, '百位算错了', '个位算错了', '没有错'],
+      `正确的算法：\n${addSteps(a, b)}\n${n} 的得数比正确答案少了 10，说明十位少加了个位进上来的 1。`, null, true)
+  }
+  let a, b; do { a = R(412, 896); b = R(137, a - 100) } while (a % 10 >= b % 10)
+  const ans = '十位没有减去被个位借走的 1'
+  return choice('hard', `${n} 算 ${a} − ${b} = ${a - b + 10}，错在哪里？`, ans, [ans, '百位算错了', '个位算错了', '没有错'],
+    `正确的算法：\n${subSteps(a, b)}\n${n} 的得数比正确答案多了 10，说明十位被借走了 1，却忘了减。`, null, true)
+}
+function u5Word() {
+  const b = R(3, 9), k = R(2, 6), n = pick(NAMES), t = pick(['支铅笔', '本书', '张贴纸', '颗星星'])
+  if (Math.random() < 0.5) return input('mid', `小明有 ${b} ${t}，${n === '小明' ? '小红' : n} 的是小明的 ${k} 倍，${n === '小明' ? '小红' : n} 有多少${t.slice(0, 1)}？`, b * k, `求 ${b} 的 ${k} 倍是多少，用乘法：\n${b} × ${k} = ${b * k}。`)
+  return input('mid', `小明有 ${b * k} ${t}，小红有 ${b} ${t}，小明的是小红的几倍？`, k, `求 ${b * k} 是 ${b} 的几倍，用除法：\n${b * k} ÷ ${b} = ${k}（倍）。`, null, '倍')
+}
+function u5Two() {
+  const b = R(3, 9), k = R(2, 5), [x, y] = shuffle(['鸡', '鸭', '鹅', '兔']).slice(0, 2)
+  return input('hard', `${x}有 ${b} 只，${y}比${x}多 ${b * (k - 1)} 只。${y}的只数是${x}的几倍？`, k,
+    `第1步 先求${y}：${b} + ${b * (k - 1)} = ${b * k}（只）；\n第2步 求几倍：${b * k} ÷ ${b} = ${k}（倍）。\n⚠️ 易错：“多 ${b * (k - 1)} 只”不是“${b * (k - 1)} 倍”。`, null, '倍')
+}
+function u6Match() {
+  const pairs = [], used = new Set()
+  while (pairs.length < 4) {
+    const a = pick([R(12, 49), R(2, 9) * 10, R(1, 9) * 100]), k = R(2, 9)
+    if (used.has(a * k)) continue
+    used.add(a * k); pairs.push([`${a} × ${k}`, String(a * k)])
+  }
+  return matchQ('mid', '连一连：把算式和得数配成对', pairs, pairs.map(p => `${p[0]} = ${p[1]}`).join('\n') + '\n整十、整百数相乘：先算 0 前面的数，再在末尾添上 0。')
+}
+function u6Price() {
+  const a = R(36, 89), k = R(3, 6), m = Math.round(a * k / 50) * 50 + pick([-50, 50]), ok = a * k <= m
+  return choice('hard', `一个足球 ${a} 元，学校要买 ${k} 个，带了 ${m} 元。钱够吗？`, ok ? '够' : '不够', ['够', '不够'],
+    `${k} 个足球要：${a} × ${k} = ${a * k}（元），\n${a * k} ${ok ? '≤' : '>'} ${m}，所以${ok ? '够' : '不够'}。`, null, true)
+}
+function u7Frame() {
+  const a = R(3, 9), t = pick(['正方形手帕', '正方形桌布', '正方形相框'])
+  return input('mid', `一块${t}，边长 ${a} 分米，沿着四周缝一圈花边，花边长多少分米？`, a * 4, `花边的长度就是正方形的周长：\n${a} × 4 = ${a * 4}（分米）。`, null, '分米')
+}
+function u7Count() {
+  const a = R(9, 18), d = R(2, a - 3)
+  return input('hard', `一个长方形，长 ${a} 厘米，宽比长短 ${d} 厘米。这个长方形的周长是多少厘米？`, (a + a - d) * 2,
+    `第1步 先求宽：${a} − ${d} = ${a - d}（厘米）；\n第2步 求周长：（${a} + ${a - d}）× 2 = ${(a + a - d) * 2}（厘米）。`, null, '厘米')
+}
+const CN = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二']
+function u8Match() {
+  const pairs = [], used = new Set()
+  while (pairs.length < 4) {
+    const n = R(3, 12), k = R(1, n - 1), f = F(k, n)
+    if (used.has(f)) continue
+    used.add(f); pairs.push([`${CN[n]}分之${CN[k]}`, f])
+  }
+  return matchQ('mid', '连一连：把读法和分数配成对', pairs, '读分数时，先读分母（下面的数），再读“分之”，最后读分子（上面的数）：\n' + pairs.map(p => `${p[1]} 读作 ${p[0]}`).join('\n'))
+}
+function u8Pizza() {
+  const n = pick([6, 8, 9, 10, 12]), a = R(1, 3), b = R(1, n - a - 2), r = n - a - b
+  return choice('hard', `一个披萨平均切成 ${n} 块，爸爸吃了 ${a} 块，妈妈吃了 ${b} 块。还剩这个披萨的几分之几？`, F(r, n),
+    opts4(F(r, n), [F(a + b, n), F(r, n - a - b), F(n - a, n)], () => F(R(1, n - 1), n)),
+    `方法一：还剩 ${n} − ${a} − ${b} = ${r} 块，就是 ${r}/${n}；\n方法二：吃了 ${a}/${n} + ${b}/${n} = ${a + b}/${n}，还剩 1 − ${a + b}/${n} = ${r}/${n}。`)
+}
+function u9Three() {
+  const a = R(9, 16), b = R(7, 15), both = R(2, Math.min(a, b) - 2), none = R(2, 6), [x, y] = shuffle(ACTS).slice(0, 2)
+  return input('hard', `三(2)班调查：喜欢${x}的有 ${a} 人，喜欢${y}的有 ${b} 人，两项都喜欢的有 ${both} 人，两项都不喜欢的有 ${none} 人。这个班一共有多少人？`, a + b - both + none,
+    `第1步 喜欢这两项的一共：${a} + ${b} − ${both} = ${a + b - both}（人）；\n第2步 再加上两项都不喜欢的：${a + b - both} + ${none} = ${a + b - both + none}（人）。`, vennSvg(x, y), '人')
+}
 
-window.MATH = { UNITS, makeSet, makeLevel, shuffle, clockSvg, shapeParts, qKey }
