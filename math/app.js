@@ -422,7 +422,7 @@ function soundLinks() {
   return `<div class="small" style="text-align:center;margin:18px 0">
     <a href="javascript:toggleMusic()" class="lnk">${S.music ? '🎵 音乐：开' : '🎵 音乐：关'}</a>
     <a href="javascript:toggleSound()" class="lnk">${S.sound ? '🔊 音效：开' : '🔇 音效：关'}</a>
-    <a href="javascript:toggleUnlock()" class="lnk">${S.unlockAll ? '🔓 全部解锁：开' : '🔒 全部解锁：关'}</a><br>${DEMO ? '<a href="./" class="lnk">← 回到正常模式</a>' : '<a href="?demo=1" class="lnk">🧪 家长体验模式</a>'}<br>人教版三年级上册数学（新版教材）</div>`
+    <a href="javascript:toggleUnlock()" class="lnk">${S.unlockAll ? '🔓 全部解锁：开' : '🔒 全部解锁：关'}</a><br>${DEMO ? '<a href="./" class="lnk">← 回到正常模式</a>' : '<a href="?demo=1" class="lnk">🔒 家长模式</a>'}<br>人教版三年级上册数学（新版教材）</div>`
 }
 
 // ---------------- 首页地图 ----------------
@@ -1401,7 +1401,26 @@ const demo = {
   clear() { if (!confirm('清空体验存档，从头开始？')) return; localStorage.removeItem(KEY); location.reload() },
 }
 
-ensureDaily(); ensureWeek(); save()
-render(); demoBar()
-const nn = document.getElementById('nextNode')
-if (nn && totalStars() > 0) setTimeout(() => nn.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)
+// ---------------- 家长体验模式要输入密码才能进（免得孩子打开） ----------------
+const pwHash = s => { let h = 5381; for (const ch of s) h = ((h * 33) ^ ch.charCodeAt(0)) >>> 0; return h.toString(36) }
+const DEMO_PW = 'wrnnl6'
+function demoLock() {
+  $app.innerHTML = `<div class="card demo-lock"><div style="font-size:48px">🔒</div><h3>家长体验模式</h3><p class="small">请输入家长密码</p>
+    <input id="demoPw" type="password" autocomplete="off" placeholder="密码"><div id="demoErr" class="small"></div>
+    <button class="btn" onclick="demoTry()">进入</button><p class="small"><a class="lnk" href="./">← 回到游戏</a></p></div>`
+  const i = document.getElementById('demoPw'); i.focus(); i.onkeydown = e => { if (e.key === 'Enter') demoTry() }
+}
+function demoTry() {
+  const v = document.getElementById('demoPw').value.trim().toLowerCase()
+  if (pwHash(v) === DEMO_PW) { try { sessionStorage.setItem('demo_ok', '1') } catch (e) { } boot() }
+  else { SFX.bad(); document.getElementById('demoErr').textContent = '密码不对哦' }
+}
+function boot() {
+  ensureDaily(); ensureWeek(); save()
+  render(); demoBar()
+  const nn = document.getElementById('nextNode')
+  if (nn && totalStars() > 0) setTimeout(() => nn.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)
+}
+let demoOk = false
+try { demoOk = sessionStorage.getItem('demo_ok') === '1' } catch (e) { }
+if (DEMO && !demoOk) demoLock(); else boot()
