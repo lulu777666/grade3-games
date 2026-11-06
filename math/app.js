@@ -148,6 +148,7 @@ function renderMap() {
   const pct = nx ? Math.round((S.xp - p.xp) / (nx.xp - p.xp) * 100) : 100
   const d = S.daily, goal = 20
   let h = topbar('🏝️ 数学闯关岛')
+  h += `<div class="cheer" onclick="SFX.good(3)">💪 <span>薇薇加油！</span> 💪</div>`
   h += `<div class="card pet">
       <div class="face" id="petFace" onclick="petTap()">${p.face}</div>
       <div class="info"><div class="name">${esc(S.petName)} <span class="small">· ${p.stage}</span></div>
@@ -348,7 +349,10 @@ function finish() {
   if (G.mode === 'wrong') { title = '复习完成！'; sub = `改正了 ${G.right} 道错题` }
   else if (!pass) { title = G.boss ? 'Boss 太强了…' : '差一点点！'; sub = G.boss ? '心用完了，再挑战一次吧！' : `答对 ${G.right}/${n} 题，答对6题就能过关` }
   else { title = stars === 3 ? '完美通关！' : stars === 2 ? '闯关成功！' : '过关啦！'; sub = `答对 ${G.right}/${n} 题` }
+  const perfect = G.mode === 'level' && G.right === n
+  if (perfect) { title = '薇薇真棒！'; sub = `满分！${n} 题全部答对 🎉` }
   pass ? (SFX.win(), confetti(stars === 3 ? 110 : 60)) : SFX.lose()
+  if (perfect) setTimeout(() => fireworks('薇薇真棒！', `满分！${n}题全对`), 400)
   let h = `<div class="result"><div style="font-size:64px">${pass ? (G.boss ? '👑' : '🎉') : '💪'}</div>
     <div class="big">${title}</div><div style="color:var(--sub)">${sub}</div>`
   if (G.mode === 'level') h += `<div class="bigstars">${[0, 1, 2].map(i => `<span class="${i < stars ? '' : 'off'}">⭐</span>`).join('')}</div>`
@@ -365,7 +369,55 @@ function finish() {
   window.scrollTo(0, 0)
   document.querySelectorAll('.bigstars span').forEach((s, i) => setTimeout(() => { s.classList.add('in'); if (i < stars) tone(784 + i * 200, 0, 0.15, 'triangle') }, 300 + i * 350))
   const evo = G.evo
-  if (evo) setTimeout(() => showEvolve(evo), 1600)
+  if (evo) setTimeout(() => showEvolve(evo), perfect ? 5600 : 1600)
+}
+
+// ---------------- 满分烟花 ----------------
+function fireworks(text, sub, ms = 5000) {
+  const wrap = document.createElement('div'); wrap.className = 'fw'
+  wrap.innerHTML = `<canvas></canvas><div class="fw-text">${esc(text)}<small>${esc(sub || '')}</small></div><div class="fw-tip">点一下继续</div>`
+  document.body.appendChild(wrap)
+  const cv = wrap.querySelector('canvas'), ctx = cv.getContext('2d')
+  const dpr = Math.min(2, window.devicePixelRatio || 1), W = innerWidth, H = innerHeight
+  cv.width = W * dpr; cv.height = H * dpr; ctx.scale(dpr, dpr)
+  const cols = ['#ff4d6d', '#ffd166', '#06d6a0', '#4cc9f0', '#f72585', '#ff9f1c', '#b388ff', '#ffffff']
+  const rockets = [], parts = []
+  const t0 = performance.now(); let lastLaunch = 0, closed = false
+  const launch = () => rockets.push({ x: W * (0.12 + Math.random() * 0.76), y: H, vy: -(H * 0.016 + Math.random() * H * 0.006), ty: H * (0.12 + Math.random() * 0.35), c: cols[Math.floor(Math.random() * cols.length)] })
+  function burst(x, y, c) {
+    const n = 70, ring = Math.random() < 0.4
+    for (let i = 0; i < n; i++) {
+      const a = Math.PI * 2 * i / n, sp = ring ? 3.6 : 1 + Math.random() * 4
+      parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, c: Math.random() < 0.25 ? '#fff' : c })
+    }
+    tone(90 + Math.random() * 60, 0, 0.35, 'triangle', 0.12); tone(1800 + Math.random() * 600, 0.05, 0.25, 'square', 0.015)
+  }
+  function close() {
+    if (closed) return; closed = true
+    wrap.style.opacity = '0'; setTimeout(() => wrap.remove(), 600)
+  }
+  wrap.onclick = close
+  function frame(now) {
+    if (closed) return
+    const el = now - t0
+    if (el < ms - 1200 && now - lastLaunch > 320) { launch(); if (Math.random() < 0.35) launch(); lastLaunch = now }
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.fillStyle = 'rgba(12,14,48,0.25)'; ctx.fillRect(0, 0, W, H)
+    ctx.globalCompositeOperation = 'lighter'
+    for (let i = rockets.length - 1; i >= 0; i--) {
+      const r = rockets[i]; r.y += r.vy; r.vy *= 0.99
+      ctx.fillStyle = r.c; ctx.beginPath(); ctx.arc(r.x, r.y, 2.5, 0, 7); ctx.fill()
+      if (r.y <= r.ty) { burst(r.x, r.y, r.c); rockets.splice(i, 1) }
+    }
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i]; p.x += p.vx; p.y += p.vy; p.vx *= 0.975; p.vy = p.vy * 0.975 + 0.05; p.life -= 0.011
+      if (p.life <= 0) { parts.splice(i, 1); continue }
+      ctx.globalAlpha = p.life; ctx.fillStyle = p.c; ctx.beginPath(); ctx.arc(p.x, p.y, 2.3, 0, 7); ctx.fill()
+    }
+    ctx.globalAlpha = 1
+    if (el > ms) close(); else requestAnimationFrame(frame)
+  }
+  requestAnimationFrame(frame)
 }
 
 // ---------------- 错题本 ----------------
