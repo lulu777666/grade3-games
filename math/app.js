@@ -13,7 +13,7 @@ function defaults() {
   return {
     coins: 0, xp: 0, stars: {}, wrong: [], badges: [], bestCombo: 0, totalCorrect: 0, totalAns: 0, hardCorrect: 0,
     streak: 0, lastDay: '', fixed: 0, daily: { date: '', correct: 0, claimed: false },
-    sound: true, music: true, petName: '算算龙', tests: [], testUnits: [0, 1, 2, 3, 4, 5, 6, 7, 8],
+    sound: true, music: true, unlockAll: false, petName: '算算龙', tests: [], testUnits: [0, 1, 2, 3, 4, 5, 6, 7, 8],
   }
 }
 let S
@@ -240,11 +240,13 @@ function nav() {
 function soundLinks() {
   return `<div class="small" style="text-align:center;margin:18px 0">
     <a href="javascript:toggleMusic()" class="lnk">${S.music ? '🎵 音乐：开' : '🎵 音乐：关'}</a>
-    <a href="javascript:toggleSound()" class="lnk">${S.sound ? '🔊 音效：开' : '🔇 音效：关'}</a><br>人教版三年级上册数学</div>`
+    <a href="javascript:toggleSound()" class="lnk">${S.sound ? '🔊 音效：开' : '🔇 音效：关'}</a>
+    <a href="javascript:toggleUnlock()" class="lnk">${S.unlockAll ? '🔓 全部解锁：开' : '🔒 全部解锁：关'}</a><br>人教版三年级上册数学</div>`
 }
 
 // ---------------- 地图 ----------------
-function unlocked(u, l) { return l === 0 || (S.stars[lvId(u, l - 1)] || 0) > 0 }
+function unlocked(u, l) { return S.unlockAll || l === 0 || (S.stars[lvId(u, l - 1)] || 0) > 0 }
+function toggleUnlock() { S.unlockAll = !S.unlockAll; save(); SFX.tap(); toast(S.unlockAll ? '🔓 全部关卡已解锁' : '🔒 恢复成：过一关才解锁下一关'); render() }
 function renderMap() {
   const p = petNow(), nx = petNext(), pct = nx ? Math.round((S.xp - p.xp) / (nx.xp - p.xp) * 100) : 100, d = S.daily
   let h = topbar('🏝️ 闯关岛')
