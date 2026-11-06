@@ -174,3 +174,20 @@
 .shop-top{display:flex;align-items:center;gap:10px}
 .shop .item svg{display:block;margin:0 auto 4px}
 .shop{grid-template-columns:repeat(4,1fr)!important;gap:6px!important}.shop .item{padding:8px 2px!important}.shop .item .in{font-size:12px}
+/* 斩鬼次数 */
+.oni-wrap{position:relative;display:inline-block}
+.oni-chance{position:absolute;left:50%;bottom:-12px;transform:translateX(-50%);white-space:nowrap;background:#e8505b;color:#fff;font-size:14px;font-weight:800;padding:4px 12px;border-radius:99px;box-shadow:0 3px 8px rgba(232,80,91,.4);border:2px solid #fff}
+.oni-chance b{font-size:18px;color:#fff59a}
+.oni-chance span{margin-left:6px}
+.oni-chance i{font-style:normal;opacity:.3;font-size:13px}
+.oni-chance i.on{opacity:1}
+.oni-chance.none{background:#888}
+.oni-wrap + h3{margin-top:20px}
+.oni-rule{color:#e8505b}
+.dot{position:relative}
+.bchance{position:absolute;right:-8px;top:-6px;background:#e8505b;color:#fff;font-size:11px;font-weight:800;border-radius:99px;padding:1px 6px;border:2px solid #fff;line-height:1.4}
+.bchance.none{background:#999}
+.wcond{font-size:13px;margin-top:4px;color:#888}
+.wcond.ok{color:#2bb673;font-weight:700}
+.wcond .bar{height:6px;background:#eee;border-radius:4px;overflow:hidden;margin-top:3px}
+.wcond .bar i{display:block;height:100%;background:linear-gradient(90deg,#ffd166,#ff9f1c)}

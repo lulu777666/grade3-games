@@ -21,6 +21,8 @@ const DRILL_N = 5
 const COIN = { mid: 1, hard: 2, dayCap: 40, daily: 20, weekTask: 40, chest: 160, testStreak: 60 }
 const LV_COST = [50, 60, 70, 80]
 const WALLET = { p: 200, n: '爸爸的钱包 20 元' }
+// 一周最多能赚的金币（= 880）。本周赚满这么多，才能买爸爸的钱包
+const WEEK_MAX = COIN.dayCap * 7 + COIN.daily * 7 + COIN.weekTask * 6 + COIN.chest + COIN.testStreak
 
 // ---------------- 存档 ----------------
 function defaults() {
@@ -292,7 +294,7 @@ const allOwned = () => ALL_ITEMS().every(a => S.owned.includes(a.id))
 function earn(n) {
   if (S.coinDay.date !== today()) S.coinDay = { date: today(), n: 0 }
   const g = Math.max(0, Math.min(n, COIN.dayCap - S.coinDay.n))
-  S.coinDay.n += g; S.coins += g
+  S.coinDay.n += g; addCoins(g)
   return g
 }
 const coinLeft = () => (S.coinDay.date === today() ? COIN.dayCap - S.coinDay.n : COIN.dayCap)
@@ -338,11 +340,17 @@ function seeded(seed) { let s = seed; return () => { s = (s * 9301 + 49297) % 23
 function ensureWeek() {
   const mon = mondayOf(), id = dayKey(mon)
   if (S.week && S.week.id === id) return
-  if (S.week) { S.weekHist.push({ id: S.week.id, done: S.week.claimed.length, chest: S.week.chest }); if (S.weekHist.length > 20) S.weekHist.shift() }
+  if (S.week) {
+    S.weekHist.push({ id: S.week.id, done: S.week.claimed.length, chest: S.week.chest, earned: S.week.earned || 0, left: S.coins })
+    if (S.weekHist.length > 20) S.weekHist.shift()
+    S.coins = 0 // 新的一周：金币清零，每周都要重新努力
+  }
   const rnd = seeded(mon.getFullYear() * 400 + mon.getMonth() * 32 + mon.getDate())
   const ids = WEEK_POOL.map(t => t.id).map(x => [rnd(), x]).sort((a, b) => a[0] - b[0]).slice(0, 6).map(x => x[1])
-  S.week = { id, tasks: ids, c: {}, days: [], claimed: [], chest: false }
+  S.week = { id, tasks: ids, c: {}, days: [], claimed: [], chest: false, earned: 0 }
 }
+// 所有赚到的金币都走这里，顺便记下“本周一共赚了多少”
+function addCoins(n) { ensureWeek(); S.coins += n; S.week.earned = (S.week.earned || 0) + n }
 function wk(id, n = 1, max) {
   ensureWeek()
   const c = S.week.c
@@ -456,7 +464,7 @@ function renderMap() {
       const st = S.stars[lvId(u, l)] || 0, open = unlocked(u, l), boss = l === 3, isNext = open && st === 0 && !firstNext
       if (isNext) firstNext = 1
       h += `<div class="node ${boss ? 'boss' : ''} ${open ? '' : 'lock'} ${isNext ? 'next' : ''}" ${isNext ? 'id="nextNode"' : ''}>
-        <button class="dot" style="background:${U.color}" onclick="tapNode(${u},${l})">${open ? (boss ? ONI[u].f : l + 1) : '🔒'}</button>
+        <button class="dot" style="background:${U.color}" onclick="tapNode(${u},${l})">${open ? (boss ? ONI[u].f : l + 1) : '🔒'}${open && boss ? `<span class="bchance ${bossLeft(u) ? '' : 'none'}">${bossLeft(u)}/${BOSS_PER_DAY}</span>` : ''}</button>
         <div class="lbl">${boss ? ONI[u].n : LV_NAMES[l]}</div><div class="stars">${open ? starStr(st) : ''}</div></div>`
     }
     h += '</div></div>'
@@ -471,17 +479,20 @@ function petTap() {
 }
 function claimDaily() {
   if (S.daily.claimed || S.daily.correct < DAILY_GOAL) return
-  S.daily.claimed = true; S.coins += COIN.daily; save(); SFX.win(); confetti(40)
+  S.daily.claimed = true; addCoins(COIN.daily); save(); SFX.win(); confetti(40)
   toast(`🎁 今日任务完成！<br>+${COIN.daily} 金币`); renderMap()
 }
 function tapNode(u, l) {
   if (!unlocked(u, l)) { SFX.bad(); toast('🔒 先通过前一关才能解锁哦'); return }
   SFX.tap()
   if (l === 3) {
-    const o = ONI[u], extra = hasSkill(4)
-    modal(`<div class="oni-intro ${patCls()}"><div class="oni-big">${o.f}</div></div><h3>斩鬼战：${o.n}</h3><p class="oni-say">“${o.say}”</p>
-      <p>一共12题（4道难题），你只有 <b>1 颗❤️</b>${extra ? '<br>👸 樱花公主多送你 1 颗心（这颗心掉了，小樱会降 1 级）' : ''}<br>答错一题就输了，要非常仔细哦！<br>赢了金币翻倍，剑士阶级升一级！</p>
-      <div class="row"><button class="btn ghost" onclick="closeModal()">再想想</button><button class="btn red" onclick="closeModal();startLevel(${u},3)">⚔️ 出发斩鬼！</button></div>`)
+    const o = ONI[u], extra = hasSkill(4), left = bossLeft(u)
+    const dots = Array.from({ length: BOSS_PER_DAY }, (_, i) => `<i class="${i < left ? 'on' : ''}">⚔️</i>`).join('')
+    modal(`<div class="oni-wrap"><div class="oni-intro ${patCls()}"><div class="oni-big">${o.f}</div></div>
+      <div class="oni-chance ${left ? '' : 'none'}">${left ? `今天还能斩 <b>${left}</b> 次` : '今天的机会用完了'}<span>${dots}</span></div></div>
+      <h3>斩鬼战：${o.n}</h3><p class="oni-say">“${o.say}”</p>
+      <p>一共12题（4道难题），你只有 <b>1 颗❤️</b>${extra ? '<br>👸 樱花公主多送你 1 颗心（这颗心掉了，小樱会降 1 级）' : ''}<br>答错一题就输了，要非常仔细哦！<br>赢了金币翻倍，剑士阶级升一级！<br><b class="oni-rule">⚠️ 每只鬼每天只能斩 ${BOSS_PER_DAY} 次</b></p>
+      <div class="row"><button class="btn ghost" onclick="closeModal()">再想想</button>${left ? `<button class="btn red" onclick="closeModal();startLevel(${u},3)">⚔️ 出发斩鬼！</button>` : '<button class="btn" disabled>明天再来</button>'}</div>`)
   } else startLevel(u, l)
 }
 function modal(html) {
@@ -500,20 +511,23 @@ function showEvolve(p) {
 function renderShop() {
   let h = topbar('🛍️ 商店')
   const n = ALL_ITEMS().filter(a => S.owned.includes(a.id)).length, wk0 = S.week ? S.week.id : '', boughtWk = S.walletLog.some(x => x.week === wk0)
-  h += `<div class="card shop-top"><div class="pface big">${myPrincess(110)}</div><div class="small" style="font-size:13px;line-height:1.7">💡 一周最多赚 <b>880💰</b>：<br>升小樱到 4 级 260 + 全部装扮 420 + 爸爸的钱包 200 = 880。<br><b>刚好够！</b>要每天都拿满，还要拿到<b>测验连续 3 次满分</b>的 ${COIN.testStreak}💰 才够。<br>⚠️ 掉级再升会多花金币，钱包就买不起啦。</div></div>`
+  h += `<div class="card shop-top"><div class="pface big">${myPrincess(110)}</div><div class="small" style="font-size:13px;line-height:1.7">💡 一周最多赚 <b>${WEEK_MAX}💰</b>（要每天都拿满，还要拿到<b>测验连续 3 次满分</b>的 ${COIN.testStreak}💰）。<br>⚠️ <b>每到新的一周，金币清零</b>，没花完的会消失！<br>⚠️ 掉级再升会多花金币，钱包就买不起啦。</div></div>`
   const sec = [['hat', '👑 头饰', 'head'], ['dress', '👗 公主裙', ''], ['shoes', '👠 鞋子', 'feet']]
   sec.forEach(([kind, title, crop]) => {
     h += `<div class="h2">${title}</div><div class="shop">` + SHOP[kind].map(a => shopItem(a, kind, princessSvg({ lv: 0, hat: S.hat, dress: S.dress, shoes: S.shoes, [kind]: a.id }, crop ? 76 : 62, crop))).join('') + '</div>'
   })
-  h += `<div class="h2">👛 超级大奖</div><div class="card wallet ${allOwned() ? '' : 'locked'}"><span class="wi">👛</span><div class="info"><b>${WALLET.n}</b>
-    <div class="small">${allOwned() ? (boughtWk ? '这周已经买过啦，下周再来！' : '买下后会出现一张兑换券，截图给爸爸，换 20 元！') : `要先把商店里 12 样东西全部买齐才能买（已买 ${n}/12）`}</div></div>
-    <button class="btn sm ${allOwned() && !boughtWk ? 'red' : ''}" ${allOwned() && !boughtWk ? '' : 'disabled'} onclick="buyWallet()">${WALLET.p}💰</button></div>`
+  const earned = S.week.earned || 0, okEarn = earned >= WEEK_MAX, can = allOwned() && okEarn && !boughtWk
+  h += `<div class="h2">👛 超级大奖</div><div class="card wallet ${can ? '' : 'locked'}"><span class="wi">👛</span><div class="info"><b>${WALLET.n}</b>
+    <div class="small">${boughtWk ? '这周已经买过啦，下周再来！' : '两个条件都做到才能买：'}</div>
+    ${boughtWk ? '' : `<div class="wcond ${allOwned() ? 'ok' : ''}">${allOwned() ? '✅' : '⬜'} 12 样装扮全部买齐（${n}/12）</div>
+    <div class="wcond ${okEarn ? 'ok' : ''}">${okEarn ? '✅' : '⬜'} 本周赚满 ${WEEK_MAX}💰（${earned}/${WEEK_MAX}）<div class="bar"><i style="width:${Math.min(100, earned / WEEK_MAX * 100)}%"></i></div></div>`}</div>
+    <button class="btn sm ${can ? 'red' : ''}" ${can ? '' : 'disabled'} onclick="buyWallet()">${WALLET.p}💰</button></div>`
   if (S.walletLog.length) h += `<div class="small" style="text-align:center">已经兑换过：${S.walletLog.map(x => x.date).join('、')}</div>`
   $app.innerHTML = h + `<div style="text-align:center;margin:16px 0"><button class="btn ghost" onclick="go('map')">← 回到首页</button></div>` + nav()
 }
 function buyWallet() {
   ensureWeek()
-  if (!allOwned() || S.walletLog.some(x => x.week === S.week.id)) return
+  if (!allOwned() || (S.week.earned || 0) < WEEK_MAX || S.walletLog.some(x => x.week === S.week.id)) return
   if (S.coins < WALLET.p) { SFX.bad(); toast(`金币不够啦，还差 ${WALLET.p - S.coins} 💰`); return }
   const now = new Date()
   S.coins -= WALLET.p; S.walletLog.push({ week: S.week.id, date: `${dateCN(now)} ${timeStr(now)}` }); checkBadges(); save()
@@ -548,8 +562,18 @@ function newGame(mode, qs, extra) {
   G = Object.assign({ mode, qs, i: 0, right: 0, combo: 0, maxCombo: 0, coins: 0, hearts: 0, locked: false, typed: '', rec: [], score: 0, shieldQ: -1 }, extra || {})
   renderQ()
 }
+// 斩鬼：每只鬼每天最多挑战 2 次（第1~3关不限）
+const BOSS_PER_DAY = 2
+function bossLeft(u) {
+  if (!S.bossDay || S.bossDay.date !== today()) S.bossDay = { date: today(), n: {} }
+  return Math.max(0, BOSS_PER_DAY - (S.bossDay.n[u] || 0))
+}
 function startLevel(u, l) {
   const boss = l === 3
+  if (boss) {
+    if (bossLeft(u) <= 0) { SFX.bad(); toast(`⚔️ ${ONI[u].n}今天已经斩过 ${BOSS_PER_DAY} 次啦<br>明天再来挑战吧！`); return }
+    S.bossDay.n[u] = (S.bossDay.n[u] || 0) + 1
+  }
   setTheme(boss ? 'boss' : ''); Music.play(boss ? 'oni' : 'calm')
   const qs = makeLevel(u, l, new Set(S.recentQ))
   S.recentQ = S.recentQ.concat(qs.map(q => q.hid)).slice(-600); save()
@@ -983,7 +1007,8 @@ function finishLevel() {
   if (G.mode === 'level') {
     const nl = G.l < 3 ? [G.u, G.l + 1] : G.u < UNITS.length - 1 ? [G.u + 1, 0] : null
     if (pass && nl && unlocked(...nl)) h += `<button class="btn green" onclick="startLevel(${nl[0]},${nl[1]})">下一关 →</button>`
-    h += `<button class="btn ${pass ? 'ghost' : ''}" onclick="startLevel(${G.u},${G.l})">${pass && stars < 3 ? '再玩一次，冲3星！' : '再玩一次'}</button>`
+    if (G.boss && bossLeft(G.u) <= 0) h += `<div class="small" style="width:100%;text-align:center">⚔️ 今天斩这只鬼的 ${BOSS_PER_DAY} 次机会用完了，明天再来！</div>`
+    else h += `<button class="btn ${pass ? 'ghost' : ''}" onclick="startLevel(${G.u},${G.l})">${pass && stars < 3 ? '再玩一次，冲3星！' : '再玩一次'}${G.boss ? `（今天还剩 ${bossLeft(G.u)} 次）` : ''}</button>`
   } else if (G.mode === 'drill' && !drillOk) h += `<button class="btn" onclick="startDrill('${G.target}')">🎯 再练一次</button>`
   if (G.mode !== 'level') h += `<button class="btn ghost" onclick="go('wrong')">回到错题本</button>`
   h += `<button class="btn ghost" onclick="go('map')">回到首页</button></div></div>`
@@ -1071,7 +1096,7 @@ function finishTest(why) {
     S.perfStreak++
     if (S.perfStreak >= 3) {
       S.perfStreak = 0
-      if (!S.week.streak) { S.week.streak = true; S.coins += COIN.testStreak; streakMsg = `🔥 连续 3 次满分！奖励 ${COIN.testStreak}💰` }
+      if (!S.week.streak) { S.week.streak = true; addCoins(COIN.testStreak); streakMsg = `🔥 连续 3 次满分！奖励 ${COIN.testStreak}💰` }
       else streakMsg = '🔥 又连续 3 次满分！（这周的奖金已经拿过啦，下周再来）'
     } else streakMsg = `🔥 连续满分 ${S.perfStreak}/3，再满分 ${3 - S.perfStreak} 次有大奖！`
   } else S.perfStreak = 0
@@ -1162,12 +1187,12 @@ function renderWeek() {
 function claimWeek(id) {
   const t = WEEK_POOL.find(x => x.id === id)
   if (!wkDone(id) || S.week.claimed.includes(id)) return
-  S.week.claimed.push(id); S.coins += t.coin; SFX.coin(); confetti(30)
+  S.week.claimed.push(id); addCoins(t.coin); SFX.coin(); confetti(30)
   toast(`${t.i} 任务完成！+${t.coin} 金币`); save(); renderWeek()
 }
 function openChest() {
   if (S.week.chest || S.week.claimed.length < S.week.tasks.length) return
-  S.week.chest = true; S.coins += CHEST_COIN
+  S.week.chest = true; addCoins(CHEST_COIN)
   checkBadges(); save(); SFX.win(); setTimeout(() => fireworks('宝箱打开啦！', `获得 ${CHEST_COIN} 金币`, 4000), 200)
   renderWeek()
 }
@@ -1322,14 +1347,14 @@ function showHelp() {
   SFX.tap()
   modal(`<h3>📖 游戏说明</h3><div class="help">
     <p><b>🗺️ 闯关</b>：每个单元 3 关 + 1 只鬼。答对 6 题过关，全对拿 3 颗⭐。</p>
-    <p><b>⚔️ 斩鬼</b>：只有 <b>1 颗❤️</b>，错一题就输！赢了金币翻倍。</p>
-    <p><b>💰 金币</b>：答对 1 题 1 个，难题 2 个。每天最多赚 ${COIN.dayCap} 个。</p>
+    <p><b>⚔️ 斩鬼</b>：只有 <b>1 颗❤️</b>，错一题就输！赢了金币翻倍。<b>每只鬼每天只能斩 ${BOSS_PER_DAY} 次</b>（第1~3关随便玩）。</p>
+    <p><b>💰 金币</b>：答对 1 题 1 个，难题 2 个。每天最多赚 ${COIN.dayCap} 个。<b>每到新的一周，金币清零！</b></p>
     <p><b>🎁 每天</b>：答对 ${DAILY_GOAL} 题，领 ${COIN.daily}💰。</p>
     <p><b>📝 小测验</b>：每天最多 ${TEST_PER_DAY} 次。<b>连续 3 次满分</b>，领 ${COIN.testStreak}💰（每周 1 次）。</p>
     <p><b>🏆 每周</b>：每周有 6 个新任务，每个 ${COIN.weekTask}💰；全做完开宝箱 ${CHEST_COIN}💰。</p>
     <p><b>👸 小樱</b>：花金币升级，最高 4 级，每升 1 级学会 1 个本领。<br>本领每种<b>每天只能用 1 次</b>，用了小樱会<b>降 1 级</b>。</p><p class="warn">⚠️ 每周的金币只够把小樱升到 4 级<b>一次</b>！掉了级再升回来，金币就<b>不够买👛爸爸的钱包</b>啦。本领要省着用！</p>
     <p><b>🛍️ 商店</b>：给小樱买头饰、公主裙、鞋子。12 样全部买齐后，才能买 <b>👛 ${WALLET.n}</b>（每周 1 次）！</p>
-    <p class="hl">💡 一整周每天都认真做，再拿到测验满分奖，金币刚好够买下爸爸的钱包！</p></div>
+    <p class="hl">💡 <b>本周赚满 ${WEEK_MAX}💰</b>（每天都拿满 + 测验连续 3 次满分），12 样装扮也都买齐了，就能买下爸爸的钱包！</p></div>
     <button class="btn" onclick="closeModal()">知道啦！</button>`)
 }
 
@@ -1344,7 +1369,7 @@ function demoPanel() {
   modal(`<h3>🧪 家长体验面板</h3><div class="demo-grid">
     <div class="dg">💰 金币和小樱</div>${B('demo.coins()', '+1000 金币')}${B('demo.pet(4)', '小樱升满 4 级')}${B('demo.pet(0)', '小樱回到 0 级')}${B('demo.evolve()', '看升级动画')}${B('demo.resetDay()', '重置今天的限制')}
     <div class="dg">🛍️ 商店和钱包</div>${B('demo.ownAll()', '买齐全部装扮')}${B('showWallet()', '看兑换券')}${B("go('shop')", '去商店')}
-    <div class="dg">🏆 每周挑战</div>${B('demo.weekAll()', '完成全部周任务')}${B('demo.chest()', '看开宝箱')}
+    <div class="dg">🏆 每周挑战</div>${B('demo.weekAll()', '完成全部周任务')}${B('demo.newWeek()', '模拟新的一周（金币清零）')}${B('demo.chest()', '看开宝箱')}
     <div class="dg">⚔️ 闯关结局</div>${B('demo.boss(true)', '斩鬼胜利')}${B('demo.boss(false)', '斩鬼失败')}${B('demo.perfect()', '满分·薇薇真棒')}${B('demo.allBoss()', '9 只鬼全打败')}
     <div class="dg">📝 小测验结局</div>${B('demo.test(100)', '100 分')}${B('demo.test(94)', '90+ 分')}${B('demo.test(70)', '60+ 分')}${B('demo.test(40)', '不及格')}${B('demo.streak()', '连续 3 次满分')}${B("thunderShow('无敌的薇薇', '⚡ 雷光一闪 · 小测验满分 100 分！')", '⚡ 雷光一闪动画')}
     <div class="dg">其他</div>${B('showHelp()', '看游戏说明')}${B('demo.clear()', '清空体验存档')}
@@ -1354,9 +1379,10 @@ const demo = {
   coins() { S.coins += 1000; save(); render(); toast('+1000 金币') },
   pet(n) { S.petLv = n; S.maxLv = Math.max(S.maxLv, n); checkBadges(); save(); render(); toast(`小樱现在 ${n} 级`) },
   evolve() { if (S.petLv < 4) { S.petLv++; S.maxLv = Math.max(S.maxLv, S.petLv); save() } render(); showEvolve(petNow()) },
-  resetDay() { S.testDay = { date: '', n: 0 }; S.skillDay = { date: '', used: [] }; S.coinDay = { date: '', n: 0 }; S.daily.claimed = false; save(); render(); toast('今天的测验次数、本领、金币上限都重置了') },
-  ownAll() { S.owned = ALL_ITEMS().map(a => a.id); S.coins = Math.max(S.coins, WALLET.p); checkBadges(); save(); go('shop') },
+  resetDay() { S.bossDay = { date: '', n: {} }; S.testDay = { date: '', n: 0 }; S.skillDay = { date: '', used: [] }; S.coinDay = { date: '', n: 0 }; S.daily.claimed = false; save(); render(); toast('今天的测验、斩鬼次数、本领、金币上限都重置了') },
+  ownAll() { S.owned = ALL_ITEMS().map(a => a.id); S.coins = Math.max(S.coins, WALLET.p); ensureWeek(); S.week.earned = Math.max(S.week.earned || 0, WEEK_MAX); checkBadges(); save(); go('shop') },
   weekAll() { ensureWeek(); S.week.tasks.forEach(id => { S.week.c[id] = WEEK_POOL.find(t => t.id === id).goal }); save(); go('week') },
+  newWeek() { S.week.id = 'old'; ensureWeek(); S.walletLog = S.walletLog.filter(x => x.week !== S.week.id); save(); go('map'); toast('新的一周开始了：金币清零，换了新任务') },
   chest() { ensureWeek(); S.week.claimed = S.week.tasks.slice(); S.week.chest = false; go('week'); openChest() },
   fake(o) { G = Object.assign({ mode: 'level', u: 0, l: 3, boss: true, qs: Array(12).fill({}), right: 12, hearts: 1, maxHearts: 1, coins: 32, maxCombo: 12, combo: 0, rec: [] }, o) },
   boss(win) { this.fake(win ? {} : { right: 7, hearts: 0, coins: 14, maxCombo: 5 }); setTheme('boss'); finishLevel() },
