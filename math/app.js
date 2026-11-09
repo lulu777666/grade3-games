@@ -584,14 +584,24 @@ function renderShop() {
     h += `<div class="h2">${title}</div><div class="shop">` + SHOP[kind].map(a => shopItem(a, kind, princessSvg({ lv: 0, hat: S.hat, dress: S.dress, shoes: S.shoes, [kind]: a.id }, crop ? 76 : 62, crop))).join('') + '</div>'
   })
   const earned = S.week.earned || 0, okEarn = earned >= WEEK_MAX, okPet = S.petLv >= 4, can = walletOk() && !boughtWk
-  h += `<div class="h2">👛 超级大奖</div><div class="card wallet ${can ? '' : 'locked'}"><span class="wi">👛</span><div class="info"><b>${WALLET.n}</b>
+  h += `<div class="h2">👛 超级大奖</div><div class="card wallet ${can ? '' : 'locked'}"><span class="wi">${walletSvg()}</span><div class="info"><b>${WALLET.n}</b>
     <div class="small">${boughtWk ? '这周已经买过啦，下周再来！' : '三个条件都做到才能买：'}</div>
     ${boughtWk ? '' : `<div class="wcond ${allOwned() ? 'ok' : ''}">${allOwned() ? '✅' : '⬜'} 12 样装扮全部买齐（${n}/12）</div>
     <div class="wcond ${okPet ? 'ok' : ''}">${okPet ? '✅' : '⬜'} 小樱升满 4 级（${S.petLv}/4）</div>
-    <div class="wcond ${okEarn ? 'ok' : ''}">${okEarn ? '✅' : '⬜'} 本周赚满 ${WEEK_MAX}💰（${earned}/${WEEK_MAX}）<div class="small">每天拿满 + 周任务和宝箱 + 测验连续满分 + 21 个徽章奖励</div><div class="bar"><i style="width:${Math.min(100, earned / WEEK_MAX * 100)}%"></i></div></div>`}</div>
+    <div class="wcond ${okEarn ? 'ok' : ''}">${okEarn ? '✅' : '⬜'} 本周赚满 ${WEEK_MAX}💰（${earned}/${WEEK_MAX}）<div class="bar"><i style="width:${Math.min(100, earned / WEEK_MAX * 100)}%"></i></div>
+      <ul class="wlist"><li>7 天每天<b>答题</b>都赚到 ${COIN.dayCap}💰（每天最多就这么多）</li><li>7 天每天都领<b>今日任务</b> ${COIN.daily}💰</li><li>6 个<b>周任务</b>全完成，打开<b>宝箱</b></li><li><b>小测验</b>连续 2 次满分</li><li><b>21 个徽章</b>全部点亮，领完徽章奖励</li></ul></div>`}</div>
     <button class="btn sm ${can ? 'red' : ''}" ${can ? '' : 'disabled'} onclick="buyWallet()">${WALLET.p}💰</button></div>`
   if (S.walletLog.length) h += `<div class="small" style="text-align:center">已经兑换过：${S.walletLog.map(x => x.date).join('、')}</div>`
   $app.innerHTML = h + `<div style="text-align:center;margin:16px 0"><button class="btn ghost" onclick="go('map')">← 回到首页</button></div>` + nav()
+}
+// 商店里的钱包图（自己画的，比表情符号清楚）
+function walletSvg() {
+  return `<svg width="64" height="56" viewBox="0 0 64 56" aria-hidden="true">
+    <rect x="4" y="14" width="56" height="38" rx="9" fill="#ff6f91" stroke="#c2185b" stroke-width="2.5"/>
+    <path d="M4 24 Q32 34 60 24" fill="none" stroke="#c2185b" stroke-width="2"/>
+    <path d="M20 14 Q20 3 32 3 Q44 3 44 14" fill="none" stroke="#f5b700" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="27" cy="14" r="4.5" fill="#ffd54a" stroke="#c98e00" stroke-width="1.5"/><circle cx="37" cy="14" r="4.5" fill="#ffd54a" stroke="#c98e00" stroke-width="1.5"/>
+    <text x="32" y="45" text-anchor="middle" font-size="15" font-weight="900" fill="#fff">¥20</text></svg>`
 }
 // 买钱包的三个条件：装扮买齐 + 小樱满级 + 本周赚满 880（= 所有任务、宝箱、测验奖金、徽章奖励全拿到）
 const walletOk = () => { ensureWeek(); return allOwned() && S.petLv >= 4 && (S.week.earned || 0) >= WEEK_MAX }

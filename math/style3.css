@@ -129,8 +129,8 @@
 .skillbar .hintbtn{margin:3px}
 .peek{background:#fffbe6;border:2px solid #ffd666;border-radius:12px;padding:10px 12px;margin:8px 0;font-size:15px;line-height:1.6}
 .card.wallet{display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,#fff7e0,#ffe3ec);border:2px solid #ffc94d}
-.card.wallet.locked{filter:grayscale(.6);opacity:.8}
-.card.wallet .wi{font-size:40px}
+.card.wallet.locked{opacity:1}
+.card.wallet .wi{font-size:40px;line-height:0;flex:none;filter:drop-shadow(0 2px 3px rgba(194,24,91,.35))}
 .card.wallet .info{flex:1;min-width:0}
 .ticket{border:3px dashed #e8505b;border-radius:16px;padding:16px 12px;margin-bottom:10px;background:linear-gradient(135deg,#fff8e7,#ffe9ef);position:relative}
 .ticket .t1{font-size:24px;font-weight:900;color:#e8505b;letter-spacing:4px}
