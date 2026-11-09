@@ -289,7 +289,7 @@ function levelUp() {
 function doLevelUp() {
   const c = LV_COST[S.petLv]
   if (S.petLv >= 4 || S.coins < c) return
-  S.coins -= c; S.petLv++; S.maxLv = Math.max(S.maxLv, S.petLv); wk('levelup'); SFX.coin()
+  S.coins -= c; S.petLv++; S.maxLv = Math.max(S.maxLv, S.petLv); SFX.coin()
   checkBadges(); save(); render(); showEvolve(petNow())
 }
 
@@ -339,20 +339,26 @@ const WEEK_POOL = [
   { id: 'correct', i: '✅', n: '答对 100 道题', goal: 100 },
   { id: 'hard', i: '💪', n: '答对 25 道难题', goal: 25 },
   { id: 'star3', i: '⭐', n: '拿到 5 次⭐（全对过关，重玩也算）', goal: 5 },
-  { id: 'boss', i: '⚔️', n: '斩鬼 1 次（打败Boss）', goal: 1 },
+  { id: 'boss', i: '⚔️', n: '斩鬼 2 次（同一只鬼也算）', goal: 2 },
   { id: 'test80', i: '📝', n: '小测验满分 1 次', goal: 1 },
   { id: 'days', i: '📅', n: '这周有 4 天来练习', goal: 4 },
   { id: 'mastered', i: '🎯', n: '消灭 3 道错题', goal: 3 },
-  { id: 'combo', i: '🔥', n: '一关里连对 10 题', goal: 10 },
-  { id: 'perfect', i: '💯', n: '满分通关 3 次', goal: 3 },
-  { id: 'levelup', i: '🌸', n: '给小樱升级 1 次', goal: 1 },
+  { id: 'units3', i: '🗺️', n: '在 3 个不同单元拿到⭐', goal: 3 },
+  { id: 'run', i: '🔥', n: '连续答对 25 题（中间不能错，跨关也算）', goal: 25 },
+  { id: 'fig', i: '🖼️', n: '答对 20 道看图题', goal: 20 },
 ].map(t => Object.assign(t, { coin: COIN.weekTask }))
+// 第八版换掉的旧任务 → 新任务（本周已经抽到的旧任务原地换掉，已领的奖励不会再领一次）
+const WEEK_RENAME = { combo: 'units3', perfect: 'run', levelup: 'fig' }
 const CHEST_COIN = COIN.chest
 function mondayOf(d = new Date()) { const m = new Date(d); m.setHours(0, 0, 0, 0); m.setDate(m.getDate() - ((m.getDay() + 6) % 7)); return m }
 function seeded(seed) { let s = seed; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280 } }
 function ensureWeek() {
   const mon = mondayOf(), id = dayKey(mon)
-  if (S.week && S.week.id === id) return
+  if (S.week && S.week.id === id) {
+    const W = S.week, fix = x => WEEK_RENAME[x] || x
+    if (W.tasks.some(x => WEEK_RENAME[x])) { W.tasks = W.tasks.map(fix); W.claimed = W.claimed.map(fix) }
+    return
+  }
   if (S.week) {
     S.weekHist.push({ id: S.week.id, done: S.week.claimed.length, chest: S.week.chest, earned: S.week.earned || 0, left: S.coins })
     if (S.weekHist.length > 20) S.weekHist.shift()
@@ -910,6 +916,9 @@ function submit(ok, given, el) {
   ensureDaily(); checkIn(); wkDay()
   S.totalAns++
   if (ok) { S.totalCorrect++; S.daily.correct++; wk('correct'); if (hard) { S.hardCorrect++; wk('hard') } }
+  // 每周任务：连续答对（跨关也算，错一题从 0 开始）、答对看图题
+  S.week.run = ok ? (S.week.run || 0) + 1 : 0; wk('run', S.week.run, true)
+  if (ok && (q.fig || q.type === 'clock')) wk('fig')
   // ---- 小测验：不马上告诉对错，像真正考试一样 ----
   if (G.mode === 'test') {
     G.rec.push({ q, ok, given })
@@ -1001,12 +1010,15 @@ function finishLevel() {
     stars = G.boss ? (G.hearts > 0 ? 1 : 0) : rate === 1 ? 1 : 0 // 每关 1 颗星：全对（斩鬼赢了）才拿到
     const id = lvId(G.u, G.l), old = S.stars[id] || 0, r0 = rankNow()
     if (stars > old) S.stars[id] = stars
-    if (stars) wk('star3')
+    if (stars) {
+      wk('star3')
+      const us = S.week.us || (S.week.us = []) // 这周在哪些单元拿过⭐
+      if (!us.includes(G.u)) us.push(G.u)
+      wk('units3', us.length, true)
+    }
     if (G.boss && stars > 0) { wk('boss'); S.bossKills++ }
-    if (G.right === n) wk('perfect')
     if (rankNow() !== r0) rankUp = rankNow()
   }
-  wk('combo', G.maxCombo, true)
   let drillOk = false
   if (G.mode === 'drill') { drillOk = G.right === n; if (drillOk) masterWrong(G.target) }
   const badges = checkBadges(); save()
