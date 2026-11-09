@@ -403,7 +403,7 @@ const BADGES = [
   { id: 'shop', i: '🛍️', n: '小小买家', d: '在商店买1样东西', ok: () => S.owned.length >= 1 },
   { id: 'chest', i: '🎁', n: '周冠军', d: '开过1次每周宝箱', ok: () => chestCount() >= 1 },
   { id: 'fig50', i: '🖼️', n: '看图高手', d: '累计答对50道看图题', ok: () => (S.figCorrect || 0) >= 50 },
-  { id: 'chest3', i: '👑', n: '三周冠军', d: '开过3次每周宝箱', ok: () => chestCount() >= 3 },
+  { id: 'chest3', i: '👑', n: '三周冠军', d: '一共开过3次每周宝箱（不用连着）', ok: () => chestCount() >= 3 },
 ]
 function chestCount() { return (S.week && S.week.chest ? 1 : 0) + S.weekHist.filter(w => w.chest).length }
 function checkBadges() {
@@ -1270,7 +1270,7 @@ function renderWeek() {
     <div><b>${totalStars()}</b><span>星星 / 36</span></div><div><b>${BOSS_WINS()}</b><span>斩鬼 / 9</span></div><div><b>${bt >= 0 ? bt : '-'}</b><span>测验最高分</span></div></div>`
   h += `<div class="h2">🎖️ 徽章 ${S.badges.length}/${BADGES.length}</div>`
   const rw = S.badgeRw || []
-  h += '<div class="card wtasks"><div class="small" style="margin-bottom:4px">集徽章领奖励（每档只能领 1 次）</div>' + BADGE_RW.map(r => {
+  h += '<div class="card wtasks"><div class="small" style="margin-bottom:4px">徽章拿到就<b>永远保留</b>，不会每周清零。集徽章领奖励（每档只能领 1 次）</div>' + BADGE_RW.map(r => {
     const v = Math.min(S.badges.length, r.n), ok = v >= r.n, got = rw.includes(r.n)
     return `<div class="wt ${got ? 'got' : ''}"><span class="wi">🎖️</span><div class="info"><b>集到 ${r.n} 个徽章</b><div class="bar"><i style="width:${v / r.n * 100}%"></i></div><span class="small">${v}/${r.n}</span></div>
       ${got ? '<span class="small">已领 ✔</span>' : `<button class="btn sm ${ok ? 'gold' : ''}" ${ok ? '' : 'disabled'} onclick="claimBadgeRw(${r.n})">${r.coin}💰</button>`}</div>`
@@ -1446,7 +1446,7 @@ function showHelp() {
     <p><b>🎁 每天</b>：答对 ${DAILY_GOAL} 题，领 ${COIN.daily}💰。</p>
     <p><b>📝 小测验</b>：打败了哪个单元的鬼，才能考哪个单元；打败 3 只鬼以后自己选，最少选 3 个。每天最多 ${TEST_PER_DAY} 次。<b>连续 2 次满分</b>，领 ${COIN.testStreak}💰（每周 1 次）。</p>
     <p><b>🏆 每周</b>：每周有 6 个新任务，每个 ${COIN.weekTask}💰；全做完开宝箱 ${CHEST_COIN}💰。</p>
-    <p><b>🎖️ 徽章</b>：一共 ${BADGES.length} 个。集到 ${BADGE_RW.map(r => `${r.n} 个领 ${r.coin}💰`).join('、')}（在每周挑战页下面领，每档 1 次）。</p>
+    <p><b>🎖️ 徽章</b>：一共 ${BADGES.length} 个，拿到就<b>永远保留</b>，不会清零。集到 ${BADGE_RW.map(r => `${r.n} 个领 ${r.coin}💰`).join('、')}（在每周挑战页下面领，每档 1 次）。</p>
     <p><b>👸 小樱</b>：花金币升级，最高 4 级，每升 1 级学会 1 个本领。<br>本领每种<b>每天只能用 1 次</b>，用了小樱会<b>降 1 级</b>。</p><p class="warn">⚠️ 每周的金币只够把小樱升到 4 级<b>一次</b>！掉了级再升回来，金币就<b>不够买👛爸爸的钱包</b>啦。本领要省着用！</p>
     <p><b>🛍️ 商店</b>：给小樱买头饰、公主裙、鞋子。12 样全部买齐后，才能买 <b>👛 ${WALLET.n}</b>（每周 1 次）！</p>
     <p class="hl">💡 <b>本周赚满 ${WEEK_MAX}💰</b>（每天都拿满 + 测验连续 2 次满分），12 样装扮也都买齐了，就能买下爸爸的钱包！</p></div>
