@@ -27,7 +27,7 @@ const WEEK_MAX = COIN.dayCap * 7 + COIN.daily * 7 + COIN.weekTask * 6 + COIN.che
 // ---------------- 存档 ----------------
 function defaults() {
   return {
-    ver: 6, coins: 0, xp: 0, petLv: 0, stars: {}, wrong: [], wrongDone: [], badges: [], bestCombo: 0, totalCorrect: 0, totalAns: 0, hardCorrect: 0,
+    ver: 7, coins: 0, xp: 0, petLv: 0, stars: {}, wrong: [], wrongDone: [], badges: [], bestCombo: 0, totalCorrect: 0, totalAns: 0, hardCorrect: 0,
     streak: 0, lastDay: '', fixed: 0, daily: { date: '', correct: 0, claimed: false },
     sound: true, music: true, unlockAll: false, petName: '小樱', tests: [], testUnits: [0, 1, 2, 3, 4, 5, 6, 7, 8],
     recentQ: [], owned: [], hat: '', dress: '', shoes: '', week: null, weekHist: [], bossKills: 0,
@@ -60,6 +60,11 @@ if (saved.coins !== undefined && (saved.ver || 0) < 5) {
 }
 // 第六版之后：“全部解锁”只在家长模式里有，孩子的存档要一关一关闯
 if (saved.coins !== undefined && (saved.ver || 0) < 6) { S.unlockAll = false; S.ver = 6 }
+// 第七版：每关只有 1 颗星。以前的 3 星（全对）换成 1 颗星；斩鬼赢过的也换成 1 颗星；没全对的普通关不算过关
+if (saved.coins !== undefined && (saved.ver || 0) < 7) {
+  Object.keys(S.stars).forEach(k => { const v = S.stars[k], boss = k.endsWith('-3'); if ((boss && v > 0) || v >= 3) S.stars[k] = 1; else delete S.stars[k] })
+  S.ver = 7; try { localStorage.setItem(KEY, JSON.stringify(S)) } catch (e) { }
+}
 if (DEMO) S.unlockAll = true
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)) } catch (e) { } }
 const dayKey = d => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
@@ -218,7 +223,7 @@ function toggleSound() { S.sound = !S.sound; save(); render() }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const fmt = s => esc(s).replace(/(\d+)\/(\d+)/g, '<span class="frac"><span>$1</span><span>$2</span></span>').replace(/\n/g, '<br>')
 const showA = (q, s) => (q.html ? String(s) : fmt(s)) // 图形选项（观察物体）直接显示图
-const starStr = n => [0, 1, 2].map(i => `<span class="${i < n ? '' : 'off'}">⭐</span>`).join('')
+const starStr = n => `<span class="${n ? '' : 'off'}">⭐</span>` // 每关只有 1 颗星：全对才拿到
 const totalStars = () => Object.values(S.stars).reduce((a, b) => a + b, 0)
 const lvId = (u, l) => `${u}-${l}`
 const LV_NAMES = ['第1关', '第2关', '第3关', 'Boss']
@@ -321,9 +326,9 @@ const RANKS = [
   { n: '小小新手', s: '新手' }, { n: '木剑剑士', s: '木剑' }, { n: '竹剑剑士', s: '竹剑' }, { n: '铁剑剑士', s: '铁剑' }, { n: '铜剑剑士', s: '铜剑' },
   { n: '银剑剑士', s: '银剑' }, { n: '金剑剑士', s: '金剑' }, { n: '宝石剑士', s: '宝石' }, { n: '闪电剑士', s: '闪电' }, { n: '斩鬼大英雄', s: '英雄' },
 ]
-const RANK_TOP = { n: '无敌大英雄', s: '无敌' } // 9 只鬼全部 3 星
+const RANK_TOP = { n: '无敌大英雄', s: '无敌' } // 全部 36 关都拿到⭐
 const BOSS_WINS = () => UNITS.filter((_, u) => (S.stars[lvId(u, 3)] || 0) > 0).length
-const rankObj = () => (UNITS.every((_, u) => (S.stars[lvId(u, 3)] || 0) === 3) ? RANK_TOP : RANKS[BOSS_WINS()])
+const rankObj = () => (UNITS.every((_, u) => [0, 1, 2, 3].every(l => S.stars[lvId(u, l)])) ? RANK_TOP : RANKS[BOSS_WINS()])
 const rankNow = () => rankObj().n
 const SKILL_NAME = c => (c >= 10 ? '旭日斩' : c >= 7 ? '雷光一闪' : c >= 5 ? '烈焰斩' : c >= 3 ? '流水斩' : '斩！')
 
@@ -333,7 +338,7 @@ const SKILL_NAME = c => (c >= 10 ? '旭日斩' : c >= 7 ? '雷光一闪' : c >= 
 const WEEK_POOL = [
   { id: 'correct', i: '✅', n: '答对 100 道题', goal: 100 },
   { id: 'hard', i: '💪', n: '答对 25 道难题', goal: 25 },
-  { id: 'star3', i: '⭐', n: '拿到 5 次三星', goal: 5 },
+  { id: 'star3', i: '⭐', n: '拿到 5 次⭐（全对过关，重玩也算）', goal: 5 },
   { id: 'boss', i: '⚔️', n: '斩鬼 1 次（打败Boss）', goal: 1 },
   { id: 'test80', i: '📝', n: '小测验得 80 分以上', goal: 1 },
   { id: 'days', i: '📅', n: '这周有 4 天来练习', goal: 4 },
@@ -376,8 +381,8 @@ const BADGES = [
   { id: 'c5', i: '🔥', n: '小火苗', d: '连续答对5题', ok: () => S.bestCombo >= 5 },
   { id: 'c10', i: '⚡', n: '闪电手', d: '连续答对10题', ok: () => S.bestCombo >= 10 },
   { id: 'h20', i: '💪', n: '难题克星', d: '答对20道难题', ok: () => S.hardCorrect >= 20 },
-  { id: 's5', i: '⭐', n: '摘星星', d: '5关拿到3颗星', ok: () => Object.values(S.stars).filter(v => v === 3).length >= 5 },
-  { id: 's20', i: '🏅', n: '满星达人', d: '20关拿到3颗星', ok: () => Object.values(S.stars).filter(v => v === 3).length >= 20 },
+  { id: 's5', i: '⭐', n: '摘星星', d: '5关拿到⭐', ok: () => Object.values(S.stars).filter(v => v > 0).length >= 5 },
+  { id: 's20', i: '🏅', n: '满星达人', d: '20关拿到⭐', ok: () => Object.values(S.stars).filter(v => v > 0).length >= 20 },
   { id: 'b1', i: '⚔️', n: '初次斩鬼', d: '打败第1只鬼', ok: () => BOSS_WINS() >= 1 },
   { id: 'b5', i: '🛡️', n: '勇敢的剑士', d: '打败5只鬼', ok: () => BOSS_WINS() >= 5 },
   { id: 'b9', i: '🏆', n: '打败鬼王', d: '打败全部9只鬼', ok: () => BOSS_WINS() >= 9 },
@@ -434,8 +439,8 @@ function soundLinks() {
 }
 
 // ---------------- 首页地图 ----------------
-// 每一关要全部答对（3 星）才能解锁下一关
-function unlocked(u, l) { return S.unlockAll || l === 0 || (S.stars[lvId(u, l - 1)] || 0) >= 3 }
+// 每一关要全部答对（拿到⭐）才能解锁下一关
+function unlocked(u, l) { return S.unlockAll || l === 0 || (S.stars[lvId(u, l - 1)] || 0) > 0 }
 function toggleUnlock() { S.unlockAll = !S.unlockAll; save(); SFX.tap(); toast(S.unlockAll ? '🔓 全部关卡已解锁' : '🔒 恢复成：过一关才解锁下一关'); render() }
 function petCard() {
   const p = petNow(), nx = petNext(), k = S.petLv
@@ -468,7 +473,7 @@ function renderMap() {
   let firstNext = null
   UNITS.forEach((U, u) => {
     const got = [0, 1, 2, 3].reduce((a, l) => a + (S.stars[lvId(u, l)] || 0), 0)
-    h += `<div class="unit"><div class="head" style="background:${U.color}"><span>${U.icon}</span><span><span class="no">${U.label}</span><br>${U.name}</span><span class="prog">⭐ ${got}/12</span></div><div class="nodes">`
+    h += `<div class="unit"><div class="head" style="background:${U.color}"><span>${U.icon}</span><span><span class="no">${U.label}</span><br>${U.name}</span><span class="prog">⭐ ${got}/4</span></div><div class="nodes">`
     for (let l = 0; l < 4; l++) {
       const st = S.stars[lvId(u, l)] || 0, open = unlocked(u, l), boss = l === 3, isNext = open && st === 0 && !firstNext
       if (isNext) firstNext = 1
@@ -993,10 +998,10 @@ function finishLevel() {
   const nl = G.mode !== 'level' ? null : G.l < 3 ? [G.u, G.l + 1] : G.u < UNITS.length - 1 ? [G.u + 1, 0] : null
   const wasOpen = nl ? unlocked(...nl) : true
   if (G.mode === 'level') {
-    stars = G.boss ? (G.hearts <= 0 ? 0 : G.hearts >= G.maxHearts ? 3 : 2) : rate === 1 ? 3 : rate >= 0.8 ? 2 : rate >= 0.6 ? 1 : 0
+    stars = G.boss ? (G.hearts > 0 ? 1 : 0) : rate === 1 ? 1 : 0 // 每关 1 颗星：全对（斩鬼赢了）才拿到
     const id = lvId(G.u, G.l), old = S.stars[id] || 0, r0 = rankNow()
     if (stars > old) S.stars[id] = stars
-    if (stars === 3) wk('star3')
+    if (stars) wk('star3')
     if (G.boss && stars > 0) { wk('boss'); S.bossKills++ }
     if (G.right === n) wk('perfect')
     if (rankNow() !== r0) rankUp = rankNow()
@@ -1009,13 +1014,13 @@ function finishLevel() {
   if (G.mode === 'wrong') { title = '复习完成！'; sub = `答对 ${G.right}/${n} 题<br><span class="small">想把错题消灭掉，要用 🎯 专项训练：类似的 ${DRILL_N} 题全对才算真正学会</span>` }
   else if (G.mode === 'drill') { title = drillOk ? '🎯 错题消灭！' : '还差一点点！'; sub = drillOk ? `${DRILL_N} 题全对，这道错题已经移到“已消灭”` : `答对 ${G.right}/${n} 题，要 ${DRILL_N} 题全对才能消灭它，再练一次吧！` }
   else if (!pass) { title = G.boss ? `${ONI[G.u].n}太强了…` : '差一点点！'; sub = G.boss ? '心用完了，再挑战一次吧！' : `答对 ${G.right}/${n} 题。<br>要<b>全部答对</b>，才能解锁下一关哦！再来一次吧！` }
-  else { title = G.boss ? `斩鬼成功！${ONI[G.u].n}被打败了` : stars === 3 ? '完美通关！' : stars === 2 ? '闯关成功！' : '过关啦！'; sub = `答对 ${G.right}/${n} 题` }
+  else { title = G.boss ? `斩鬼成功！${ONI[G.u].n}被打败了` : '完美通关！'; sub = `答对 ${G.right}/${n} 题` }
   if (perfect) { title = G.boss ? '斩鬼成功！全部答对！' : '薇薇真棒！'; sub = G.boss ? `${ONI[G.u].n}被打败了，${n} 题全对 🎉` : `满分！${n} 题全部答对 🎉` }
   setTheme(''); Music.play('calm')
   const bossWin = G.mode === 'level' && G.boss && pass, newOpen = !wasOpen && nl && unlocked(...nl), U0 = G.u
   // 结算页上的音效、烟花、惊喜特效（斩鬼胜利要等胜利动画播完再放）
   const effects = () => {
-    pass && (G0.mode !== 'drill' || drillOk) ? (SFX.win(), confetti(stars === 3 || drillOk ? 110 : 60)) : SFX.lose()
+    pass && (G0.mode !== 'drill' || drillOk) ? (SFX.win(), confetti(stars || drillOk ? 110 : 60)) : SFX.lose()
     if (perfect && !bossWin) setTimeout(() => fireworks('薇薇真棒！', `满分！${n}题全对${newOpen && nl[1] < 3 && nl[0] === U0 ? ` · 🔓 第${nl[1] + 1}关解锁啦` : ''}`), 400)
     document.querySelectorAll('.bigstars span').forEach((s, i) => setTimeout(() => { s.classList.add('in'); if (i < stars) tone(784 + i * 200, 0, 0.15, 'triangle') }, 300 + i * 350))
     if (newOpen && nl[1] === 3) celebrate(`<span class="cele-oni">${ONI[U0].f}</span>`, '斩鬼关开启！', `${ONI[U0].n}出现了，你敢挑战吗？`)
@@ -1027,7 +1032,7 @@ function finishLevel() {
   const G0 = G
   let h = `<div class="result"><div style="font-size:64px">${G.mode === 'drill' ? (drillOk ? '🎯' : '💪') : pass ? (G.boss ? '⚔️' : '🎉') : '💪'}</div><div class="big">${title}</div><div style="color:var(--sub)">${sub}</div>`
   h += `<div class="res-date">📅 ${dateCN(now)} ${timeStr(now)}</div>`
-  if (G.mode === 'level') h += `<div class="bigstars">${[0, 1, 2].map(i => `<span class="${i < stars ? '' : 'off'}">⭐</span>`).join('')}</div>`
+  if (G.mode === 'level') h += `<div class="bigstars"><span class="${stars ? '' : 'off'}">⭐</span></div>${stars ? '' : '<div class="small">全部答对才能拿到这颗⭐</div>'}`
   if (rankUp) h += `<div class="newbadge rankup">⚔️ 称号升级！你现在是「${rankUp}」</div>`
   h += `<div class="stats"><span class="chip">💰 +${G.coins}${coinLeft() ? '' : '（今日已满）'}</span><span class="chip">🔥 最高${G.maxCombo}连对</span></div>`
   badges.forEach(b => { h += `<div class="newbadge">🎖️ 获得新徽章：${b.i} ${b.n}（${b.d}）</div>` })
@@ -1226,7 +1231,7 @@ function renderWeek() {
   if (last) h += `<div class="small" style="text-align:center;margin:-4px 0 8px">上周完成了 ${last.done}/6 个任务${last.chest ? '，打开了宝箱 🎊' : ''}</div>`
   const acc = S.totalAns ? Math.round(S.totalCorrect / S.totalAns * 100) : 0, bt = bestTest()
   h += `<div class="h2">📊 我的数据</div><div class="card statrow"><div><b>${S.totalCorrect}</b><span>答对题数</span></div><div><b>${acc}%</b><span>正确率</span></div><div><b>${S.bestCombo}</b><span>最高连对</span></div>
-    <div><b>${totalStars()}</b><span>星星 / 108</span></div><div><b>${BOSS_WINS()}</b><span>斩鬼 / 9</span></div><div><b>${bt >= 0 ? bt : '-'}</b><span>测验最高分</span></div></div>`
+    <div><b>${totalStars()}</b><span>星星 / 36</span></div><div><b>${BOSS_WINS()}</b><span>斩鬼 / 9</span></div><div><b>${bt >= 0 ? bt : '-'}</b><span>测验最高分</span></div></div>`
   h += `<div class="h2">🎖️ 徽章 ${S.badges.length}/${BADGES.length}</div><div class="grid">` +
     BADGES.map(b => `<div class="bd ${S.badges.includes(b.id) ? '' : 'lock'}"><div class="i">${b.i}</div><div class="n">${b.n}</div><div class="d">${b.d}</div></div>`).join('') + '</div>'
   $app.innerHTML = h + soundLinks() + nav()
@@ -1393,7 +1398,7 @@ function fireworks(text, sub, ms = 5000) {
 function showHelp() {
   SFX.tap()
   modal(`<h3>📖 游戏说明</h3><div class="help">
-    <p><b>🗺️ 闯关</b>：每个单元 3 关 + 1 只鬼。<b>每一关都要全部答对</b>，才能打开下一关！</p>
+    <p><b>🗺️ 闯关</b>：每个单元 3 关 + 1 只鬼。<b>每一关都要全部答对</b>，才能拿到 1 颗⭐、打开下一关！</p>
     <p><b>⚔️ 斩鬼</b>：只有 <b>1 颗❤️</b>，错一题就输！赢了金币翻倍。<b>每只鬼每天只能斩 ${BOSS_PER_DAY} 次</b>（第1~3关随便玩）。</p>
     <p><b>💰 金币</b>：答对 1 题 1 个，难题 2 个。每天最多赚 ${COIN.dayCap} 个。<b>每到新的一周，金币清零！</b></p>
     <p><b>🎁 每天</b>：答对 ${DAILY_GOAL} 题，领 ${COIN.daily}💰。</p>
@@ -1434,7 +1439,7 @@ const demo = {
   fake(o) { G = Object.assign({ mode: 'level', u: 0, l: 3, boss: true, qs: Array(12).fill({}), right: 12, hearts: 1, maxHearts: 1, coins: 32, maxCombo: 12, combo: 0, rec: [] }, o) },
   boss(win) { this.fake(win ? {} : { right: 7, hearts: 0, coins: 14, maxCombo: 5 }); setTheme('boss'); finishLevel() },
   perfect() { this.fake({ l: 0, boss: false, qs: Array(10).fill({}), right: 10, hearts: 0, coins: 13, maxCombo: 10 }); finishLevel() },
-  allBoss() { UNITS.forEach((_, u) => { for (let l = 0; l < 4; l++) S.stars[lvId(u, l)] = 3 }); S.bossKills = Math.max(S.bossKills, 9); checkBadges(); save(); go('map'); toast('全部关卡 3 星，称号：无敌大英雄') },
+  allBoss() { UNITS.forEach((_, u) => { for (let l = 0; l < 4; l++) S.stars[lvId(u, l)] = 1 }); S.bossKills = Math.max(S.bossKills, 9); checkBadges(); save(); go('map'); toast('全部关卡都拿到⭐，称号：无敌大英雄') },
   test(score) {
     const qs = makeSet(UNITS.map((_, i) => i), TEST_MID, TEST_HARD, {})
     G = { mode: 'test', qs, rec: [], right: 0, score: 0, coins: 0, units: UNITS.map((_, i) => i), t0: Date.now() - 18 * 60000 }
