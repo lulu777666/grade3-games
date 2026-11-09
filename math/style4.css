@@ -1,0 +1,87 @@
+/* ===== 第七版：地图上的鬼头像 + 锁 ===== */
+.oface { display: inline-block; line-height: 1; }
+.oface.locked { filter: grayscale(1) brightness(.75); opacity: .75; }
+.lockb { position: absolute; right: -4px; bottom: -4px; font-size: 20px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); }
+
+/* ===== 斩鬼开场 / 胜利动画 ===== */
+.oni-fx { position: fixed; inset: 0; z-index: 80; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; text-align: center; transition: opacity .35s; -webkit-user-select: none; user-select: none; }
+.oni-fx.out { opacity: 0; }
+.ofx-bg { position: absolute; inset: 0; background: radial-gradient(circle at 50% 45%, #3a0610 0%, #12030a 60%, #000 100%); }
+.ofx-red { position: absolute; inset: 0; }
+.intro.s1 .ofx-red { animation: ofxRedPulse .5s ease-in-out infinite alternate; }
+@keyframes ofxRedPulse { from { box-shadow: inset 0 0 60px 10px rgba(255,0,40,.35); } to { box-shadow: inset 0 0 160px 60px rgba(255,0,40,.75); } }
+.ofx-warn { position: absolute; top: 9%; left: 0; right: 0; font-size: 34px; font-weight: 900; letter-spacing: 4px; color: #ff3355; text-shadow: 0 0 18px #ff0033; opacity: 0; }
+.ofx-warn small { display: block; font-size: 17px; letter-spacing: 2px; color: #ffd0d6; margin-top: 4px; }
+.intro.s1 .ofx-warn { opacity: 1; animation: ofxBlink .45s steps(2) infinite; }
+.intro.s3 .ofx-warn { animation: none; opacity: .55; }
+@keyframes ofxBlink { 50% { opacity: .25; } }
+.ofx-oni { position: relative; font-size: 150px; line-height: 1; opacity: 0; transform: scale(.1); filter: drop-shadow(0 0 30px rgba(255,30,60,.9)); }
+.intro.s2 .ofx-oni { animation: ofxZoom .7s cubic-bezier(.2,1.6,.4,1) forwards, ofxShake .12s .7s linear infinite; }
+@keyframes ofxZoom { 0% { opacity: 0; transform: scale(.1) rotate(-20deg); } 100% { opacity: 1; transform: scale(1) rotate(0); } }
+@keyframes ofxShake { 0%,100% { opacity: 1; transform: translate(0,0); } 25% { opacity: 1; transform: translate(-4px,2px); } 75% { opacity: 1; transform: translate(4px,-2px); } }
+.ofx-name { position: relative; font-size: 46px; font-weight: 900; margin-top: 10px; color: #ffe066; text-shadow: 0 0 6px #000, 0 0 24px #ff3355; opacity: 0; letter-spacing: 6px; }
+.intro.s3 .ofx-name { animation: ofxSlam .35s cubic-bezier(.3,1.8,.5,1) forwards; }
+@keyframes ofxSlam { 0% { opacity: 0; transform: scale(3); } 100% { opacity: 1; transform: scale(1); } }
+.ofx-say { position: relative; font-size: 18px; margin-top: 10px; color: #ffd0d6; opacity: 0; padding: 0 24px; transition: opacity .4s; }
+.intro.s4 .ofx-say { opacity: 1; }
+.ofx-count { position: absolute; bottom: 10%; left: 0; right: 0; font-size: 80px; font-weight: 900; color: #fff; text-shadow: 0 0 20px #ff3355; }
+.ofx-count.pop { animation: ofxCnt .55s ease-out; }
+@keyframes ofxCnt { 0% { transform: scale(2.4); opacity: 0; } 30% { opacity: 1; } 100% { transform: scale(1); } }
+.ofx-cut { position: absolute; left: -20%; top: 50%; width: 140%; height: 8px; background: #fff; box-shadow: 0 0 30px 12px #fff, 0 0 80px 30px #ffd84d; transform: rotate(-24deg) scaleX(0); opacity: 0; }
+.intro.s5 .ofx-cut { animation: ofxCut .45s ease-out forwards; }
+@keyframes ofxCut { 0% { opacity: 1; transform: rotate(-24deg) scaleX(0); } 60% { opacity: 1; transform: rotate(-24deg) scaleX(1); } 100% { opacity: 0; transform: rotate(-24deg) scaleX(1) scaleY(6); } }
+.ofx-skip { position: absolute !important; bottom: 3%; left: 0; right: 0; }
+
+/* 胜利 */
+.win .ofx-bg { background: radial-gradient(circle at 50% 45%, #2a1a4a 0%, #0c0718 70%, #000 100%); }
+.win.s4 .ofx-bg { background: radial-gradient(circle at 50% 45%, #6b3d00 0%, #2a1200 60%, #0b0500 100%); }
+.win .ofx-oni { position: absolute; top: 18%; left: 0; right: 0; opacity: 1; transform: none; }
+.win.s1 .ofx-oni.whole { animation: ofxShake .1s linear infinite; }
+.win .ofx-oni.half { opacity: 0; }
+.win .ofx-oni.a { clip-path: polygon(0 0, 100% 0, 100% 35%, 0 65%); -webkit-clip-path: polygon(0 0, 100% 0, 100% 35%, 0 65%); }
+.win .ofx-oni.b { clip-path: polygon(0 65%, 100% 35%, 100% 100%, 0 100%); -webkit-clip-path: polygon(0 65%, 100% 35%, 100% 100%, 0 100%); }
+.win.s3 .ofx-oni.whole { opacity: 0; animation: none; }
+.win.s3 .ofx-oni.a { animation: ofxHalfA 1.1s ease-in forwards; }
+.win.s3 .ofx-oni.b { animation: ofxHalfB 1.1s ease-in forwards; }
+@keyframes ofxHalfA { 0% { opacity: 1; transform: none; } 100% { transform: translate(-90px,-70px) rotate(-25deg); opacity: 0; } }
+@keyframes ofxHalfB { 0% { opacity: 1; transform: none; } 100% { transform: translate(90px,120px) rotate(20deg); opacity: 0; } }
+.ofx-slash { position: absolute; left: -20%; top: 30%; width: 140%; height: 6px; background: #fff; box-shadow: 0 0 24px 10px #9fe8ff, 0 0 60px 24px #4cc9f0; transform: rotate(-20deg) scaleX(0); transform-origin: left; opacity: 0; }
+.win.s2 .ofx-slash { animation: ofxSlash .35s ease-out forwards; }
+@keyframes ofxSlash { 0% { opacity: 1; transform: rotate(-20deg) scaleX(0); } 70% { opacity: 1; transform: rotate(-20deg) scaleX(1); } 100% { opacity: 0; transform: rotate(-20deg) scaleX(1); } }
+.ofx-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.win.s3 .ofx-flash { animation: ofxFlash .6s ease-out; }
+@keyframes ofxFlash { 0% { opacity: .95; } 100% { opacity: 0; } }
+.ofx-rays { position: absolute; left: 50%; top: 50%; width: 220vmax; height: 220vmax; margin: -110vmax 0 0 -110vmax; background: repeating-conic-gradient(rgba(255,215,90,.22) 0 10deg, transparent 10deg 20deg); opacity: 0; transition: opacity .8s; }
+.win.s4 .ofx-rays { opacity: 1; animation: ofxSpin 14s linear infinite; }
+@keyframes ofxSpin { to { transform: rotate(360deg); } }
+.ofx-win { position: relative; font-size: 50px; font-weight: 900; color: #ffd84d; text-shadow: 0 3px 0 #a0522d, 0 0 30px #ffb300; opacity: 0; margin-top: 90px; letter-spacing: 4px; padding: 0 10px; }
+.ofx-win small { display: block; font-size: 20px; color: #fff3c4; text-shadow: 0 1px 3px #000; letter-spacing: 1px; margin-top: 8px; }
+.win.s4 .ofx-win { animation: ofxSlam .45s cubic-bezier(.3,1.8,.5,1) forwards; }
+.ofx-rank { font-size: 19px; letter-spacing: 1px; margin-top: 16px; padding: 8px 16px; border-radius: 30px; background: linear-gradient(90deg,#ff7a00,#ffcc00); color: #4a1d00; text-shadow: none; opacity: 0; transform: scale(.4); display: inline-block; }
+.win.s5 .ofx-rank { animation: ofxRank .5s cubic-bezier(.3,1.8,.5,1) forwards; }
+@keyframes ofxRank { to { opacity: 1; transform: scale(1); } }
+
+/* ===== 惊喜庆祝（完成任务、升级、买东西、拿徽章、解锁新关卡） ===== */
+.cele { position: fixed; inset: 0; z-index: 75; display: flex; align-items: center; justify-content: center; background: rgba(15,8,35,.85); transition: opacity .35s; animation: celeFade .25s; overflow: hidden; }
+.cele.out { opacity: 0; }
+@keyframes celeFade { from { opacity: 0; } }
+.cele-box { position: relative; width: 300px; max-width: 86vw; text-align: center; padding: 28px 16px 24px; }
+.cele-rays { position: absolute; left: 50%; top: 40%; width: 520px; height: 520px; margin: -260px 0 0 -260px; border-radius: 50%; background: repeating-conic-gradient(rgba(255,220,100,.4) 0 12deg, transparent 12deg 24deg); -webkit-mask: radial-gradient(circle, #000 20%, transparent 68%); mask: radial-gradient(circle, #000 20%, transparent 68%); animation: ofxSpin 8s linear infinite; pointer-events: none; }
+.cele-stars { position: absolute; left: 50%; top: 40%; }
+.cele-stars i { position: absolute; font-style: normal; font-size: 22px; left: -11px; top: -14px; opacity: 0; animation: celeStar 1.1s var(--d) ease-out forwards; }
+@keyframes celeStar { 0% { opacity: 1; transform: translate(0,0) scale(.3); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--x),var(--y)) scale(1.2) rotate(200deg); } }
+.cele-icon { position: relative; font-size: 92px; line-height: 1.1; animation: celePop .6s cubic-bezier(.3,1.8,.5,1) both, celeBob 1.6s .6s ease-in-out infinite; }
+.cele-icon .cele-pic svg { display: block; margin: 0 auto; }
+.cele-icon .cele-oni { display: inline-block; filter: drop-shadow(0 0 18px #ff3355); }
+@keyframes celePop { from { transform: scale(0) rotate(-30deg); } to { transform: scale(1) rotate(0); } }
+@keyframes celeBob { 50% { transform: translateY(-8px); } }
+.cele-t { position: relative; font-size: 26px; font-weight: 900; color: #ffe066; text-shadow: 0 2px 0 #c05600, 0 0 16px rgba(255,170,0,.8); margin-top: 8px; animation: ofxSlam .4s .2s cubic-bezier(.3,1.8,.5,1) both; }
+.cele-s { position: relative; font-size: 17px; color: #fff; margin-top: 8px; text-shadow: 0 1px 3px #000; animation: celeFade .4s .45s both; }
+
+/* ===== 小测验：没解锁的单元 ===== */
+.usel.lock { opacity: .5; filter: grayscale(.8); }
+.usel.lock .ck { background: none; border: none; }
+.test-tip { background: #fff7e0; border: 2px dashed #ffc94d; border-radius: 14px; padding: 10px 12px; font-size: 14px; line-height: 1.7; margin: 8px 0; }
+
+/* 彩纸要飘在特效上面 */
+.confetti { position: fixed; z-index: 95; pointer-events: none; }

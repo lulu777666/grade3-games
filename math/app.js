@@ -27,7 +27,7 @@ const WEEK_MAX = COIN.dayCap * 7 + COIN.daily * 7 + COIN.weekTask * 6 + COIN.che
 // ---------------- 存档 ----------------
 function defaults() {
   return {
-    ver: 5, coins: 0, xp: 0, petLv: 0, stars: {}, wrong: [], wrongDone: [], badges: [], bestCombo: 0, totalCorrect: 0, totalAns: 0, hardCorrect: 0,
+    ver: 6, coins: 0, xp: 0, petLv: 0, stars: {}, wrong: [], wrongDone: [], badges: [], bestCombo: 0, totalCorrect: 0, totalAns: 0, hardCorrect: 0,
     streak: 0, lastDay: '', fixed: 0, daily: { date: '', correct: 0, claimed: false },
     sound: true, music: true, unlockAll: false, petName: '小樱', tests: [], testUnits: [0, 1, 2, 3, 4, 5, 6, 7, 8],
     recentQ: [], owned: [], hat: '', dress: '', shoes: '', week: null, weekHist: [], bossKills: 0,
@@ -58,6 +58,8 @@ if (saved.coins !== undefined && (saved.ver || 0) < 5) {
   delete S.acc; delete S.pat
   S.ver = 5
 }
+// 第六版之后：“全部解锁”只在家长模式里有，孩子的存档要一关一关闯
+if (saved.coins !== undefined && (saved.ver || 0) < 6) { S.unlockAll = false; S.ver = 6 }
 if (DEMO) S.unlockAll = true
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)) } catch (e) { } }
 const dayKey = d => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
@@ -314,9 +316,15 @@ const ONI = [
   { n: '碎片鬼', f: '👹', say: '我把月亮切成了一块块碎片！' },
   { n: '鬼王', f: '👹', say: '终于来了，小剑士。这是最后的考验！' },
 ]
-const RANKS = ['见习', '癸', '壬', '辛', '庚', '己', '戊', '丁', '丙', '乙', '甲']
+// 称号：每打败一只鬼升一级（孩子一看就懂）
+const RANKS = [
+  { n: '小小新手', s: '新手' }, { n: '木剑剑士', s: '木剑' }, { n: '竹剑剑士', s: '竹剑' }, { n: '铁剑剑士', s: '铁剑' }, { n: '铜剑剑士', s: '铜剑' },
+  { n: '银剑剑士', s: '银剑' }, { n: '金剑剑士', s: '金剑' }, { n: '宝石剑士', s: '宝石' }, { n: '闪电剑士', s: '闪电' }, { n: '斩鬼大英雄', s: '英雄' },
+]
+const RANK_TOP = { n: '无敌大英雄', s: '无敌' } // 9 只鬼全部 3 星
 const BOSS_WINS = () => UNITS.filter((_, u) => (S.stars[lvId(u, 3)] || 0) > 0).length
-const rankNow = () => (UNITS.every((_, u) => (S.stars[lvId(u, 3)] || 0) === 3) ? '甲' : RANKS[BOSS_WINS()])
+const rankObj = () => (UNITS.every((_, u) => (S.stars[lvId(u, 3)] || 0) === 3) ? RANK_TOP : RANKS[BOSS_WINS()])
+const rankNow = () => rankObj().n
 const SKILL_NAME = c => (c >= 10 ? '旭日斩' : c >= 7 ? '雷光一闪' : c >= 5 ? '烈焰斩' : c >= 3 ? '流水斩' : '斩！')
 
 // ============================================================
@@ -422,11 +430,12 @@ function soundLinks() {
   return `<div class="small" style="text-align:center;margin:18px 0">
     <a href="javascript:toggleMusic()" class="lnk">${S.music ? '🎵 音乐：开' : '🎵 音乐：关'}</a>
     <a href="javascript:toggleSound()" class="lnk">${S.sound ? '🔊 音效：开' : '🔇 音效：关'}</a>
-    <a href="javascript:toggleUnlock()" class="lnk">${S.unlockAll ? '🔓 全部解锁：开' : '🔒 全部解锁：关'}</a><br>${DEMO ? '<a href="./" class="lnk">← 回到正常模式</a>' : '<a href="?demo=1" class="lnk">🔒 家长模式</a>'}<br>人教版三年级上册数学（新版教材）</div>`
+    ${DEMO ? `<a href="javascript:toggleUnlock()" class="lnk">${S.unlockAll ? '🔓 全部解锁：开' : '🔒 全部解锁：关'}</a>` : ''}<br>${DEMO ? '<a href="./" class="lnk">← 回到正常模式</a>' : '<a href="?demo=1" class="lnk">🔒 家长模式</a>'}<br>人教版三年级上册数学（新版教材）</div>`
 }
 
 // ---------------- 首页地图 ----------------
-function unlocked(u, l) { return S.unlockAll || l === 0 || (S.stars[lvId(u, l - 1)] || 0) > 0 }
+// 每一关要全部答对（3 星）才能解锁下一关
+function unlocked(u, l) { return S.unlockAll || l === 0 || (S.stars[lvId(u, l - 1)] || 0) >= 3 }
 function toggleUnlock() { S.unlockAll = !S.unlockAll; save(); SFX.tap(); toast(S.unlockAll ? '🔓 全部关卡已解锁' : '🔒 恢复成：过一关才解锁下一关'); render() }
 function petCard() {
   const p = petNow(), nx = petNext(), k = S.petLv
@@ -445,7 +454,7 @@ function renderMap() {
   let h = topbar('📘 三年级数学上')
   h += `<div class="datebar">📅 ${dateCN()}</div>`
   h += `<div class="cheer ${patCls()}" onclick="SFX.good(3)"><div class="cheer-in">💪 <span>薇薇加油！</span> 💪</div></div>`
-  h += `<div class="card slayer ${patCls()}" onclick="go('week')"><div class="sl-in"><span class="sl-ic">⚔️</span><div class="info"><b>斩鬼剑士 · 薇薇</b><div class="small">阶级「${rankNow()}」· 已斩鬼 ${BOSS_WINS()}/9 · 打败每个单元的鬼就能升级</div></div><span class="sl-rank">${rankNow()}</span></div></div>`
+  h += `<div class="card slayer ${patCls()}" onclick="go('week')"><div class="sl-in"><span class="sl-ic">⚔️</span><div class="info"><b>斩鬼剑士 · 薇薇</b><div class="small">称号「${rankNow()}」· 已斩鬼 ${BOSS_WINS()}/9 · 每打败一只鬼，称号升一级</div></div><span class="sl-rank">${rankObj().s}</span></div></div>`
   h += petCard()
   const done = S.week.tasks.filter(wkDone).length
   h += `<div class="card daily"><div class="ic">${d.claimed ? '✅' : '🎁'}</div>
@@ -464,7 +473,7 @@ function renderMap() {
       const st = S.stars[lvId(u, l)] || 0, open = unlocked(u, l), boss = l === 3, isNext = open && st === 0 && !firstNext
       if (isNext) firstNext = 1
       h += `<div class="node ${boss ? 'boss' : ''} ${open ? '' : 'lock'} ${isNext ? 'next' : ''}" ${isNext ? 'id="nextNode"' : ''}>
-        <button class="dot" style="background:${U.color}" onclick="tapNode(${u},${l})">${open ? (boss ? ONI[u].f : l + 1) : '🔒'}${open && boss ? `<span class="bchance ${bossLeft(u) ? '' : 'none'}">${bossLeft(u)}/${BOSS_PER_DAY}</span>` : ''}</button>
+        <button class="dot" style="background:${U.color}" onclick="tapNode(${u},${l})">${boss ? `<span class="oface ${open ? '' : 'locked'}">${ONI[u].f}</span>${open ? '' : '<span class="lockb">🔒</span>'}` : open ? l + 1 : '🔒'}${open && boss ? `<span class="bchance ${bossLeft(u) ? '' : 'none'}">${bossLeft(u)}/${BOSS_PER_DAY}</span>` : ''}</button>
         <div class="lbl">${boss ? ONI[u].n : LV_NAMES[l]}</div><div class="stars">${open ? starStr(st) : ''}</div></div>`
     }
     h += '</div></div>'
@@ -479,8 +488,8 @@ function petTap() {
 }
 function claimDaily() {
   if (S.daily.claimed || S.daily.correct < DAILY_GOAL) return
-  S.daily.claimed = true; addCoins(COIN.daily); save(); SFX.win(); confetti(40)
-  toast(`🎁 今日任务完成！<br>+${COIN.daily} 金币`); renderMap()
+  S.daily.claimed = true; addCoins(COIN.daily); save()
+  celebrate('🎁', '今日任务完成！', `奖励 ${COIN.daily} 💰，明天继续加油！`); renderMap()
 }
 function tapNode(u, l) {
   if (!unlocked(u, l)) { SFX.bad(); toast('🔒 先通过前一关才能解锁哦'); return }
@@ -491,7 +500,7 @@ function tapNode(u, l) {
     modal(`<div class="oni-wrap"><div class="oni-intro ${patCls()}"><div class="oni-big">${o.f}</div></div>
       <div class="oni-chance ${left ? '' : 'none'}">${left ? `今天还能斩 <b>${left}</b> 次` : '今天的机会用完了'}<span>${dots}</span></div></div>
       <h3>斩鬼战：${o.n}</h3><p class="oni-say">“${o.say}”</p>
-      <p>一共12题（4道难题），你只有 <b>1 颗❤️</b>${extra ? '<br>👸 樱花公主多送你 1 颗心（这颗心掉了，小樱会降 1 级）' : ''}<br>答错一题就输了，要非常仔细哦！<br>赢了金币翻倍，剑士阶级升一级！<br><b class="oni-rule">⚠️ 每只鬼每天只能斩 ${BOSS_PER_DAY} 次</b></p>
+      <p>一共12题（4道难题），你只有 <b>1 颗❤️</b>${extra ? '<br>👸 樱花公主多送你 1 颗心（这颗心掉了，小樱会降 1 级）' : ''}<br>答错一题就输了，要非常仔细哦！<br>赢了金币翻倍，称号升一级！<br><b class="oni-rule">⚠️ 每只鬼每天只能斩 ${BOSS_PER_DAY} 次</b></p>
       <div class="row"><button class="btn ghost" onclick="closeModal()">再想想</button>${left ? `<button class="btn red" onclick="closeModal();startLevel(${u},3)">⚔️ 出发斩鬼！</button>` : '<button class="btn" disabled>明天再来</button>'}</div>`)
   } else startLevel(u, l)
 }
@@ -502,9 +511,11 @@ function modal(html) {
 }
 function closeModal() { const m = document.getElementById('modal'); if (m) m.remove() }
 function showEvolve(p) {
-  SFX.win(); confetti(80)
-  const sk = SKILLS.find(s => PET[s.lv] === p)
-  modal(`<div class="evo-pic">${princessSvg({ lv: PET.indexOf(p), hat: S.hat, dress: S.dress, shoes: S.shoes }, 120)}</div><h3>${esc(S.petName)}升级了！</h3><p>变成了「${p.stage}」<br>${p.say[0]}</p>${sk ? `<div class="newbadge">学会新本领：${sk.i} ${sk.n}<br><span class="small">${sk.d}</span></div>` : ''}<button class="btn" onclick="closeModal()">太好了！</button>`)
+  const pic = princessSvg({ lv: PET.indexOf(p), hat: S.hat, dress: S.dress, shoes: S.shoes }, 140)
+  celebrate(`<span class="cele-pic">${pic}</span>`, `${esc(S.petName)}升级了！`, `变成了「${p.stage}」`, 3000, () => {
+    const sk = SKILLS.find(s => PET[s.lv] === p)
+    modal(`<div class="evo-pic">${princessSvg({ lv: PET.indexOf(p), hat: S.hat, dress: S.dress, shoes: S.shoes }, 120)}</div><h3>${esc(S.petName)}升级了！</h3><p>变成了「${p.stage}」<br>${p.say[0]}</p>${sk ? `<div class="newbadge">学会新本领：${sk.i} ${sk.n}<br><span class="small">${sk.d}</span></div>` : ''}<button class="btn" onclick="closeModal()">太好了！</button>`)
+  })
 }
 
 // ---------------- 商店 ----------------
@@ -549,8 +560,8 @@ function shopItem(a, kind, pic) {
 function buy(kind, id) {
   const a = SHOP[kind].find(x => x.id === id)
   if (S.coins < a.p) { SFX.bad(); toast(`金币不够啦，还差 ${a.p - S.coins} 💰`); return }
-  S.coins -= a.p; S.owned.push(id); S[kind] = id; SFX.coin(); confetti(30)
-  toast(`买到了「${a.n}」！已经换上`); checkBadges(); save(); renderShop()
+  S.coins -= a.p; S.owned.push(id); S[kind] = id; SFX.coin()
+  celebrate(`<span class="cele-pic">${myPrincess(130)}</span>`, `买到了「${a.n}」！`, '已经换上啦，真好看！'); checkBadges(); save(); renderShop()
 }
 function equip(kind, id) { S[kind] = id; SFX.tap(); save(); renderShop() }
 
@@ -562,18 +573,23 @@ function newGame(mode, qs, extra) {
   G = Object.assign({ mode, qs, i: 0, right: 0, combo: 0, maxCombo: 0, coins: 0, hearts: 0, locked: false, typed: '', rec: [], score: 0, shieldQ: -1 }, extra || {})
   renderQ()
 }
-// 斩鬼：每只鬼每天最多挑战 2 次（第1~3关不限）
-const BOSS_PER_DAY = 2
+// 斩鬼：每只鬼每天最多挑战 3 次（第1~3关不限）
+const BOSS_PER_DAY = 3
 function bossLeft(u) {
   if (!S.bossDay || S.bossDay.date !== today()) S.bossDay = { date: today(), n: {} }
   return Math.max(0, BOSS_PER_DAY - (S.bossDay.n[u] || 0))
 }
 function startLevel(u, l) {
-  const boss = l === 3
-  if (boss) {
+  if (l === 3) {
     if (bossLeft(u) <= 0) { SFX.bad(); toast(`⚔️ ${ONI[u].n}今天已经斩过 ${BOSS_PER_DAY} 次啦<br>明天再来挑战吧！`); return }
-    S.bossDay.n[u] = (S.bossDay.n[u] || 0) + 1
+    S.bossDay.n[u] = (S.bossDay.n[u] || 0) + 1; save()
+    setTheme('boss')
+    return oniIntro(u, () => beginLevel(u, l))   // 先播 5 秒开场动画
   }
+  beginLevel(u, l)
+}
+function beginLevel(u, l) {
+  const boss = l === 3
   setTheme(boss ? 'boss' : ''); Music.play(boss ? 'oni' : 'calm')
   const qs = makeLevel(u, l, new Set(S.recentQ))
   S.recentQ = S.recentQ.concat(qs.map(q => q.hid)).slice(-600); save()
@@ -974,8 +990,10 @@ function masterWrong(h) {
 function finishLevel() {
   const n = G.qs.length, rate = G.right / n, now = new Date()
   let stars = 0, title, sub, rankUp = null
+  const nl = G.mode !== 'level' ? null : G.l < 3 ? [G.u, G.l + 1] : G.u < UNITS.length - 1 ? [G.u + 1, 0] : null
+  const wasOpen = nl ? unlocked(...nl) : true
   if (G.mode === 'level') {
-    stars = G.boss ? (G.hearts <= 0 ? 0 : G.hearts >= G.maxHearts ? 3 : 2) : rate >= 0.9 ? 3 : rate >= 0.7 ? 2 : rate >= 0.6 ? 1 : 0
+    stars = G.boss ? (G.hearts <= 0 ? 0 : G.hearts >= G.maxHearts ? 3 : 2) : rate === 1 ? 3 : rate >= 0.8 ? 2 : rate >= 0.6 ? 1 : 0
     const id = lvId(G.u, G.l), old = S.stars[id] || 0, r0 = rankNow()
     if (stars > old) S.stars[id] = stars
     if (stars === 3) wk('star3')
@@ -987,43 +1005,52 @@ function finishLevel() {
   let drillOk = false
   if (G.mode === 'drill') { drillOk = G.right === n; if (drillOk) masterWrong(G.target) }
   const badges = checkBadges(); save()
-  const pass = G.mode === 'wrong' || G.mode === 'drill' ? true : stars > 0, perfect = G.mode === 'level' && G.right === n
+  const pass = G.mode === 'wrong' || G.mode === 'drill' ? true : G.boss ? stars > 0 : G.right === n, perfect = G.mode === 'level' && G.right === n
   if (G.mode === 'wrong') { title = '复习完成！'; sub = `答对 ${G.right}/${n} 题<br><span class="small">想把错题消灭掉，要用 🎯 专项训练：类似的 ${DRILL_N} 题全对才算真正学会</span>` }
   else if (G.mode === 'drill') { title = drillOk ? '🎯 错题消灭！' : '还差一点点！'; sub = drillOk ? `${DRILL_N} 题全对，这道错题已经移到“已消灭”` : `答对 ${G.right}/${n} 题，要 ${DRILL_N} 题全对才能消灭它，再练一次吧！` }
-  else if (!pass) { title = G.boss ? `${ONI[G.u].n}太强了…` : '差一点点！'; sub = G.boss ? '心用完了，再挑战一次吧！' : `答对 ${G.right}/${n} 题，答对6题就能过关` }
+  else if (!pass) { title = G.boss ? `${ONI[G.u].n}太强了…` : '差一点点！'; sub = G.boss ? '心用完了，再挑战一次吧！' : `答对 ${G.right}/${n} 题。<br>要<b>全部答对</b>，才能解锁下一关哦！再来一次吧！` }
   else { title = G.boss ? `斩鬼成功！${ONI[G.u].n}被打败了` : stars === 3 ? '完美通关！' : stars === 2 ? '闯关成功！' : '过关啦！'; sub = `答对 ${G.right}/${n} 题` }
-  if (perfect) { title = '薇薇真棒！'; sub = `满分！${n} 题全部答对 🎉` }
+  if (perfect) { title = G.boss ? '斩鬼成功！全部答对！' : '薇薇真棒！'; sub = G.boss ? `${ONI[G.u].n}被打败了，${n} 题全对 🎉` : `满分！${n} 题全部答对 🎉` }
   setTheme(''); Music.play('calm')
-  pass && (G.mode !== 'drill' || drillOk) ? (SFX.win(), confetti(stars === 3 || drillOk ? 110 : 60)) : SFX.lose()
-  if (perfect) setTimeout(() => fireworks('薇薇真棒！', `满分！${n}题全对`), 400)
+  const bossWin = G.mode === 'level' && G.boss && pass, newOpen = !wasOpen && nl && unlocked(...nl), U0 = G.u
+  // 结算页上的音效、烟花、惊喜特效（斩鬼胜利要等胜利动画播完再放）
+  const effects = () => {
+    pass && (G0.mode !== 'drill' || drillOk) ? (SFX.win(), confetti(stars === 3 || drillOk ? 110 : 60)) : SFX.lose()
+    if (perfect && !bossWin) setTimeout(() => fireworks('薇薇真棒！', `满分！${n}题全对${newOpen && nl[1] < 3 && nl[0] === U0 ? ` · 🔓 第${nl[1] + 1}关解锁啦` : ''}`), 400)
+    document.querySelectorAll('.bigstars span').forEach((s, i) => setTimeout(() => { s.classList.add('in'); if (i < stars) tone(784 + i * 200, 0, 0.15, 'triangle') }, 300 + i * 350))
+    if (newOpen && nl[1] === 3) celebrate(`<span class="cele-oni">${ONI[U0].f}</span>`, '斩鬼关开启！', `${ONI[U0].n}出现了，你敢挑战吗？`)
+    if (newOpen && nl[1] === 0) celebrate(UNITS[nl[0]].icon, '新单元解锁！', `${UNITS[nl[0]].label} ${UNITS[nl[0]].name}`)
+    if (drillOk) celebrate('🎯', '错题消灭！', '又学会了一个本领，真厉害！')
+    badges.forEach(b => celebrate(b.i, '获得新徽章！', `${b.n}：${b.d}`))
+    if (evo) whenFree(() => showEvolve(evo), 600)
+  }
+  const G0 = G
   let h = `<div class="result"><div style="font-size:64px">${G.mode === 'drill' ? (drillOk ? '🎯' : '💪') : pass ? (G.boss ? '⚔️' : '🎉') : '💪'}</div><div class="big">${title}</div><div style="color:var(--sub)">${sub}</div>`
   h += `<div class="res-date">📅 ${dateCN(now)} ${timeStr(now)}</div>`
   if (G.mode === 'level') h += `<div class="bigstars">${[0, 1, 2].map(i => `<span class="${i < stars ? '' : 'off'}">⭐</span>`).join('')}</div>`
-  if (rankUp) h += `<div class="newbadge rankup">⚔️ 剑士阶级升级！现在是「${rankUp}」级剑士</div>`
+  if (rankUp) h += `<div class="newbadge rankup">⚔️ 称号升级！你现在是「${rankUp}」</div>`
   h += `<div class="stats"><span class="chip">💰 +${G.coins}${coinLeft() ? '' : '（今日已满）'}</span><span class="chip">🔥 最高${G.maxCombo}连对</span></div>`
   badges.forEach(b => { h += `<div class="newbadge">🎖️ 获得新徽章：${b.i} ${b.n}（${b.d}）</div>` })
   if (wkReady()) h += `<div class="newbadge" onclick="go('week')" style="cursor:pointer">🏆 有每周挑战的奖励可以领啦！点这里去领</div>`
   h += '<div class="acts">'
   if (G.mode === 'level') {
-    const nl = G.l < 3 ? [G.u, G.l + 1] : G.u < UNITS.length - 1 ? [G.u + 1, 0] : null
     if (pass && nl && unlocked(...nl)) h += `<button class="btn green" onclick="startLevel(${nl[0]},${nl[1]})">下一关 →</button>`
     if (G.boss && bossLeft(G.u) <= 0) h += `<div class="small" style="width:100%;text-align:center">⚔️ 今天斩这只鬼的 ${BOSS_PER_DAY} 次机会用完了，明天再来！</div>`
-    else h += `<button class="btn ${pass ? 'ghost' : ''}" onclick="startLevel(${G.u},${G.l})">${pass && stars < 3 ? '再玩一次，冲3星！' : '再玩一次'}${G.boss ? `（今天还剩 ${bossLeft(G.u)} 次）` : ''}</button>`
+    else h += `<button class="btn ${pass ? 'ghost' : ''}" onclick="startLevel(${G.u},${G.l})">${pass ? '再玩一次' : '再挑战一次'}${G.boss ? `（今天还剩 ${bossLeft(G.u)} 次）` : ''}</button>`
   } else if (G.mode === 'drill' && !drillOk) h += `<button class="btn" onclick="startDrill('${G.target}')">🎯 再练一次</button>`
   if (G.mode !== 'level') h += `<button class="btn ghost" onclick="go('wrong')">回到错题本</button>`
   h += `<button class="btn ghost" onclick="go('map')">回到首页</button></div></div>`
   const evo = G.evo
   G = null
   $app.innerHTML = h; window.scrollTo(0, 0)
-  document.querySelectorAll('.bigstars span').forEach((s, i) => setTimeout(() => { s.classList.add('in'); if (i < stars) tone(784 + i * 200, 0, 0.15, 'triangle') }, 300 + i * 350))
-  if (evo) setTimeout(() => showEvolve(evo), perfect ? 5600 : 1600)
+  bossWin ? oniDefeat(U0, rankUp, effects) : effects()
 }
 
 // ============================================================
 //  小测验
 // ============================================================
 function renderTestSetup() {
-  const sel = S.testUnits
+  const open = testOpen(), sel = testSel()
   let h = topbar('📝 小测验')
   h += `<div class="datebar">📅 ${dateCN()}</div>`
   h += `<div class="card"><b>📋 测验说明</b><div class="small" style="font-size:14px;line-height:1.7;margin-top:4px">
@@ -1035,19 +1062,38 @@ function renderTestSetup() {
   ensureWeek()
   const left = testLeft()
   h += `<div class="card statrow"><div><b>${left}/${TEST_PER_DAY}</b><span>今天还能测</span></div><div><b>${S.perfStreak}/3</b><span>连续满分</span></div><div><b>${S.week.streak ? '已拿 ✔' : COIN.testStreak + '💰'}</b><span>本周满分奖金</span></div></div>`
-  h += `<div class="h2">选择要考的单元 <span class="small">（可多选）</span></div>
-    <div class="selbtns"><button class="btn sm ghost" onclick="selAll(true)">全选</button><button class="btn sm ghost" onclick="selAll(false)">全不选</button></div>
-    <div class="ugrid">${UNITS.map((U, u) => `<button class="usel ${sel.includes(u) ? 'on' : ''}" style="--c:${U.color}" onclick="selUnit(${u})"><span class="ck">${sel.includes(u) ? '✔' : ''}</span><span class="ui">${U.icon}</span><span class="un">${U.label}<br><b>${U.name}</b></span></button>`).join('')}</div>`
-  h += left > 0 ? `<button class="btn big-start" ${sel.length ? '' : 'disabled'} onclick="startTest()">🚀 开始测验（已选 ${sel.length} 个单元）</button>`
-    : `<button class="btn big-start" disabled>今天已经测了 ${TEST_PER_DAY} 次，明天再来吧 🌙</button>`
+  const need = testNeed(), many = open.length >= 3
+  const tip = !open.length ? `🔒 小测验还没开放！<br>先去地图上<b>打败至少 1 只鬼</b>，打败了哪个单元的鬼，那个单元的题才能放进测验。`
+    : !many ? `⚔️ 你已经打败了 <b>${open.length}</b> 只鬼，测验会考这 ${open.length} 个单元。<br>打败 3 只鬼以后，就可以自己挑单元啦（最少选 3 个）。`
+    : `⚔️ 你已经打败了 <b>${open.length}</b> 只鬼。请选择要考的单元，<b>最少选 3 个</b>。<br>🔒 的单元要先打败那里的鬼。`
+  h += `<div class="h2">要考的单元</div><div class="test-tip">${tip}</div>`
+  if (many) h += `<div class="selbtns"><button class="btn sm ghost" onclick="selAll(true)">全选</button><button class="btn sm ghost" onclick="selAll(false)">全不选</button></div>`
+  h += `<div class="ugrid">${UNITS.map((U, u) => { const ok = open.includes(u), on = sel.includes(u); return `<button class="usel ${on ? 'on' : ''} ${ok ? '' : 'lock'}" style="--c:${U.color}" onclick="selUnit(${u})"><span class="ck">${ok ? (on ? '✔' : '') : '🔒'}</span><span class="ui">${U.icon}</span><span class="un">${U.label}<br><b>${U.name}</b></span></button>` }).join('')}</div>`
+  h += left <= 0 ? `<button class="btn big-start" disabled>今天已经测了 ${TEST_PER_DAY} 次，明天再来吧 🌙</button>`
+    : !open.length ? `<button class="btn big-start" disabled>🔒 先打败 1 只鬼才能测验</button>`
+    : sel.length < need ? `<button class="btn big-start" disabled>还要再选 ${need - sel.length} 个单元（最少 ${need} 个）</button>`
+    : `<button class="btn big-start" onclick="startTest()">🚀 开始测验（${sel.length} 个单元）</button>`
   if (S.tests.length) {
     h += `<div class="h2">📜 历史成绩</div><div class="card hist">` + S.tests.slice().reverse().slice(0, 15).map(t =>
       `<div class="hrow"><span class="hd">${t.date}</span><span class="hs ${rating(t.score).cls}">${t.score}分</span><span class="ht">${rating(t.score).name}</span></div>`).join('') + '</div>'
   }
   $app.innerHTML = h + nav()
 }
-function selUnit(u) { const s = S.testUnits; s.includes(u) ? s.splice(s.indexOf(u), 1) : s.push(u); s.sort((a, b) => a - b); save(); SFX.tap(); renderTestSetup() }
-function selAll(on) { S.testUnits = on ? UNITS.map((_, i) => i) : []; save(); SFX.tap(); renderTestSetup() }
+// 小测验只能考“已经打败了鬼”的单元；不到 3 个就全考，3 个以上自己选、最少 3 个
+const testOpen = () => UNITS.map((_, u) => u).filter(u => (S.stars[lvId(u, 3)] || 0) > 0)
+const testNeed = () => Math.min(3, testOpen().length)
+function testSel() {
+  const open = testOpen()
+  if (open.length < 3) return open
+  return (S.testUnits || []).filter(u => open.includes(u))
+}
+function selUnit(u) {
+  const open = testOpen()
+  if (!open.includes(u)) { SFX.bad(); toast(`🔒 先打败「${ONI[u].n}」<br>这个单元才能放进测验`); return }
+  if (open.length < 3) { SFX.tap(); toast('打败 3 只鬼以后，才能自己挑单元哦'); return }
+  const s = testSel(); s.includes(u) ? s.splice(s.indexOf(u), 1) : s.push(u); s.sort((a, b) => a - b); S.testUnits = s; save(); SFX.tap(); renderTestSetup()
+}
+function selAll(on) { S.testUnits = on ? testOpen() : []; save(); SFX.tap(); renderTestSetup() }
 function rating(s) {
   if (s >= 100) return { name: '无敌的薇薇', icon: '👑', cls: 'r4', say: '满分！你就是数学小天才，谁也挡不住！' }
   if (s >= 90) return { name: '聪明的薇薇', icon: '🌟', cls: 'r3', say: '太棒了！离满分只差一点点，下次冲击无敌！' }
@@ -1062,12 +1108,13 @@ function testLeft() {
   return Math.max(0, TEST_PER_DAY - S.testDay.n)
 }
 function startTest() {
-  if (!S.testUnits.length || testLeft() <= 0) return
+  const units = testSel()
+  if (!units.length || units.length < testNeed() || testLeft() <= 0) return
   S.testDay.n++
   setTheme('test'); Music.play('focus')
-  const qs = makeSet(S.testUnits, TEST_MID, TEST_HARD, { avoid: new Set(S.recentQ) })
+  const qs = makeSet(units, TEST_MID, TEST_HARD, { avoid: new Set(S.recentQ) })
   S.recentQ = S.recentQ.concat(qs.map(q => q.hid)).slice(-600); save()
-  newGame('test', qs, { units: S.testUnits.slice(), t0: Date.now(), deadline: Date.now() + TEST_MIN * 60000 })
+  newGame('test', qs, { units: units.slice(), t0: Date.now(), deadline: Date.now() + TEST_MIN * 60000 })
   stopTimer(); timerId = setInterval(updateTimer, 1000)
 }
 function updateTimer() {
@@ -1187,8 +1234,8 @@ function renderWeek() {
 function claimWeek(id) {
   const t = WEEK_POOL.find(x => x.id === id)
   if (!wkDone(id) || S.week.claimed.includes(id)) return
-  S.week.claimed.push(id); addCoins(t.coin); SFX.coin(); confetti(30)
-  toast(`${t.i} 任务完成！+${t.coin} 金币`); save(); renderWeek()
+  S.week.claimed.push(id); addCoins(t.coin); SFX.coin()
+  celebrate(t.i, '挑战任务完成！', `奖励 ${t.coin} 💰`); save(); renderWeek()
 }
 function openChest() {
   if (S.week.chest || S.week.claimed.length < S.week.tasks.length) return
@@ -1346,11 +1393,11 @@ function fireworks(text, sub, ms = 5000) {
 function showHelp() {
   SFX.tap()
   modal(`<h3>📖 游戏说明</h3><div class="help">
-    <p><b>🗺️ 闯关</b>：每个单元 3 关 + 1 只鬼。答对 6 题过关，全对拿 3 颗⭐。</p>
+    <p><b>🗺️ 闯关</b>：每个单元 3 关 + 1 只鬼。<b>每一关都要全部答对</b>，才能打开下一关！</p>
     <p><b>⚔️ 斩鬼</b>：只有 <b>1 颗❤️</b>，错一题就输！赢了金币翻倍。<b>每只鬼每天只能斩 ${BOSS_PER_DAY} 次</b>（第1~3关随便玩）。</p>
     <p><b>💰 金币</b>：答对 1 题 1 个，难题 2 个。每天最多赚 ${COIN.dayCap} 个。<b>每到新的一周，金币清零！</b></p>
     <p><b>🎁 每天</b>：答对 ${DAILY_GOAL} 题，领 ${COIN.daily}💰。</p>
-    <p><b>📝 小测验</b>：每天最多 ${TEST_PER_DAY} 次。<b>连续 3 次满分</b>，领 ${COIN.testStreak}💰（每周 1 次）。</p>
+    <p><b>📝 小测验</b>：打败了哪个单元的鬼，才能考哪个单元；打败 3 只鬼以后自己选，最少选 3 个。每天最多 ${TEST_PER_DAY} 次。<b>连续 3 次满分</b>，领 ${COIN.testStreak}💰（每周 1 次）。</p>
     <p><b>🏆 每周</b>：每周有 6 个新任务，每个 ${COIN.weekTask}💰；全做完开宝箱 ${CHEST_COIN}💰。</p>
     <p><b>👸 小樱</b>：花金币升级，最高 4 级，每升 1 级学会 1 个本领。<br>本领每种<b>每天只能用 1 次</b>，用了小樱会<b>降 1 级</b>。</p><p class="warn">⚠️ 每周的金币只够把小樱升到 4 级<b>一次</b>！掉了级再升回来，金币就<b>不够买👛爸爸的钱包</b>啦。本领要省着用！</p>
     <p><b>🛍️ 商店</b>：给小樱买头饰、公主裙、鞋子。12 样全部买齐后，才能买 <b>👛 ${WALLET.n}</b>（每周 1 次）！</p>
@@ -1370,7 +1417,7 @@ function demoPanel() {
     <div class="dg">💰 金币和小樱</div>${B('demo.coins()', '+1000 金币')}${B('demo.pet(4)', '小樱升满 4 级')}${B('demo.pet(0)', '小樱回到 0 级')}${B('demo.evolve()', '看升级动画')}${B('demo.resetDay()', '重置今天的限制')}
     <div class="dg">🛍️ 商店和钱包</div>${B('demo.ownAll()', '买齐全部装扮')}${B('showWallet()', '看兑换券')}${B("go('shop')", '去商店')}
     <div class="dg">🏆 每周挑战</div>${B('demo.weekAll()', '完成全部周任务')}${B('demo.newWeek()', '模拟新的一周（金币清零）')}${B('demo.chest()', '看开宝箱')}
-    <div class="dg">⚔️ 闯关结局</div>${B('demo.boss(true)', '斩鬼胜利')}${B('demo.boss(false)', '斩鬼失败')}${B('demo.perfect()', '满分·薇薇真棒')}${B('demo.allBoss()', '9 只鬼全打败')}
+    <div class="dg">⚔️ 闯关结局</div>${B('demo.boss(true)', '斩鬼胜利')}${B('demo.boss(false)', '斩鬼失败')}${B('demo.perfect()', '满分·薇薇真棒')}${B('demo.allBoss()', '9 只鬼全打败')}${B("oniIntro(1, () => go('map'))", '👹 斩鬼开场动画')}${B("celebrate('🎁', '今日任务完成！', '奖励 20 💰')", '🎉 惊喜特效')}
     <div class="dg">📝 小测验结局</div>${B('demo.test(100)', '100 分')}${B('demo.test(94)', '90+ 分')}${B('demo.test(70)', '60+ 分')}${B('demo.test(40)', '不及格')}${B('demo.streak()', '连续 3 次满分')}${B("thunderShow('无敌的薇薇', '⚡ 雷光一闪 · 小测验满分 100 分！')", '⚡ 雷光一闪动画')}
     <div class="dg">其他</div>${B('showHelp()', '看游戏说明')}${B('demo.clear()', '清空体验存档')}
   </div><p class="small"><a class="lnk" href="./">← 回到薇薇的正常模式</a></p><button class="btn" onclick="closeModal()">关闭</button>`)
@@ -1387,7 +1434,7 @@ const demo = {
   fake(o) { G = Object.assign({ mode: 'level', u: 0, l: 3, boss: true, qs: Array(12).fill({}), right: 12, hearts: 1, maxHearts: 1, coins: 32, maxCombo: 12, combo: 0, rec: [] }, o) },
   boss(win) { this.fake(win ? {} : { right: 7, hearts: 0, coins: 14, maxCombo: 5 }); setTheme('boss'); finishLevel() },
   perfect() { this.fake({ l: 0, boss: false, qs: Array(10).fill({}), right: 10, hearts: 0, coins: 13, maxCombo: 10 }); finishLevel() },
-  allBoss() { UNITS.forEach((_, u) => { for (let l = 0; l < 4; l++) S.stars[lvId(u, l)] = 3 }); S.bossKills = Math.max(S.bossKills, 9); checkBadges(); save(); go('map'); toast('全部关卡 3 星，剑士阶级：甲') },
+  allBoss() { UNITS.forEach((_, u) => { for (let l = 0; l < 4; l++) S.stars[lvId(u, l)] = 3 }); S.bossKills = Math.max(S.bossKills, 9); checkBadges(); save(); go('map'); toast('全部关卡 3 星，称号：无敌大英雄') },
   test(score) {
     const qs = makeSet(UNITS.map((_, i) => i), TEST_MID, TEST_HARD, {})
     G = { mode: 'test', qs, rec: [], right: 0, score: 0, coins: 0, units: UNITS.map((_, i) => i), t0: Date.now() - 18 * 60000 }

@@ -364,6 +364,14 @@ function caoIdea() {
     ['1 吨和 1000 千克比，哪个重？', '一样重', ['1吨重', '1000千克重', '没法比'], '1吨 = 1000千克，所以它们一样重。'],
     ['3 吨棉花和 3000 千克铁，哪个重？', '一样重', ['铁重', '棉花重', '没法比'], '3吨 = 3000千克，重量一样。\n⚠️ 不要被“铁很重”骗了，要看数量和单位。'],
     ['计量很重的东西（比如大象、货车上的货物），通常用什么作单位？', '吨', ['克', '千克', '米'], '计量很重的物品，通常用“吨”作单位。1吨 = 1000千克。'],
+    ['曹冲称象时，船上画的那条线有什么用？', '记住大象让船沉下去多深', ['让船更好看', '告诉别人船的名字', '防止船漏水'], '那条线记下了大象让船沉到哪里。换成石头后，船沉到同一条线，石头就和大象一样重。'],
+    ['曹冲称象时，如果石头装少了，船会怎样？', '沉不到那条线', ['沉得比线更深', '正好沉到线', '船会翻'], '石头比大象轻，船就沉得浅，到不了那条线。要继续往船上加石头。'],
+    ['曹冲称象时，如果石头装多了，船会怎样？', '沉得比那条线更深', ['沉不到那条线', '正好沉到线', '船会浮起来'], '石头比大象重，船就沉得更深，超过那条线。要拿掉一些石头。'],
+    ['2 千克的棉花和 2000 克的铁，哪个重？', '一样重', ['铁重', '棉花重', '没法比'], '2 千克 = 2000 克，重量一样。\n⚠️ 要先统一单位再比较。'],
+    ['计量一个鸡蛋、一块橡皮这样轻的东西，通常用什么作单位？', '克', ['千克', '吨', '厘米'], '比较轻的东西用“克”作单位。1000 克 = 1 千克。'],
+    ['计量一个人、一袋大米的重量，通常用什么作单位？', '千克', ['克', '吨', '米'], '人和一袋大米用“千克”作单位比较合适。'],
+    ['“用石头代替大象”，这种方法叫什么？', '等量替换', ['四舍五入', '凑整', '倒着想'], '用和大象一样重的石头来代替大象，重量不变，这叫“等量替换”。'],
+    ['一架天平左边放 1 个菠萝，右边放 3 个苹果，正好平衡。说明什么？', '1 个菠萝和 3 个苹果一样重', ['菠萝比 3 个苹果重', '菠萝比 3 个苹果轻', '1 个苹果和 3 个菠萝一样重'], '天平平衡，说明两边一样重。'],
   ]
   const [q, a, wr, tip] = pick(pool)
   return choice('mid', q, a, [a, ...wr], tip)
@@ -591,7 +599,9 @@ function finishQ(q, f, u) {
   if (q.type === 'choice' && !q.keep) q.options = shuffle(q.options)
   return q
 }
-let RECENT_GEN = [] // 最近几关用过的出题函数，尽量换着出
+// 最近几关用过的题型（存起来，下次打开也记得），尽量换着出
+let RECENT_GEN = []
+try { RECENT_GEN = JSON.parse(localStorage.getItem('math_recent_gen') || '[]') } catch (e) { }
 // 出一组题：nMid 道中等 + nHard 道难题（难题排在后面）
 // opt.lv：第几关（0~2 每关侧重不同的题型）；opt.avoid：最近做过的题（哈希），尽量不再出
 function makeSet(units, nMid, nHard, opt) {
@@ -605,8 +615,9 @@ function makeSet(units, nMid, nHard, opt) {
       let q = null
       for (let g = 0; g < 80 && !q; g++) {
         const ws = pool.map((f, j) => {
-          let w = 1 / (1 + 4 * (used[f.name] || 0))
-          if (RECENT_GEN.includes(f.name)) w *= 0.6
+          let w = used[f.name] ? 0.01 : 1 // 一关里同一种题只出一次（题型不够时才会重复）
+          const ri = RECENT_GEN.lastIndexOf(f.name)
+          if (ri >= 0) w *= 0.25 + 0.6 * (1 - (RECENT_GEN.length - ri) / Math.max(1, RECENT_GEN.length)) // 越近用过的越少出
           if (lv != null && lv < 3 && pool.length >= 3 && j % 3 === lv) w *= 2.2
           return w
         })
@@ -623,7 +634,8 @@ function makeSet(units, nMid, nHard, opt) {
     }
   }
   take('mid', nMid); take('hard', nHard)
-  RECENT_GEN = RECENT_GEN.concat(out.map(q => q.gen)).slice(-24)
+  RECENT_GEN = RECENT_GEN.concat(out.map(q => q.gen)).slice(-60)
+  try { localStorage.setItem('math_recent_gen', JSON.stringify(RECENT_GEN)) } catch (e) { }
   return out
 }
 const makeLevel = (unit, lv, avoid) => (lv === 3 ? makeSet([unit], 8, 4, { lv, avoid }) : makeSet([unit], 7, 3, { lv, avoid }))
