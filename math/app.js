@@ -27,7 +27,7 @@ const WEEK_MAX = COIN.dayCap * 7 + COIN.daily * 7 + COIN.weekTask * 6 + COIN.che
 // ---------------- 存档 ----------------
 function defaults() {
   return {
-    ver: 7, coins: 0, xp: 0, petLv: 0, stars: {}, wrong: [], wrongDone: [], badges: [], bestCombo: 0, totalCorrect: 0, totalAns: 0, hardCorrect: 0,
+    ver: 8, coins: 0, xp: 0, petLv: 0, stars: {}, wrong: [], wrongDone: [], bestCombo: 0, totalCorrect: 0, totalAns: 0, hardCorrect: 0,
     streak: 0, lastDay: '', fixed: 0, daily: { date: '', correct: 0, claimed: false },
     sound: true, music: true, unlockAll: false, petName: '小樱', tests: [], testUnits: [0, 1, 2, 3, 4, 5, 6, 7, 8],
     recentQ: [], owned: [], hat: '', dress: '', shoes: '', week: null, weekHist: [], bossKills: 0,
@@ -64,6 +64,11 @@ if (saved.coins !== undefined && (saved.ver || 0) < 6) { S.unlockAll = false; S.
 if (saved.coins !== undefined && (saved.ver || 0) < 7) {
   Object.keys(S.stars).forEach(k => { const v = S.stars[k], boss = k.endsWith('-3'); if ((boss && v > 0) || v >= 3) S.stars[k] = 1; else delete S.stars[k] })
   S.ver = 7; try { localStorage.setItem(KEY, JSON.stringify(S)) } catch (e) { }
+}
+// 第八版：徽章改成每周一重新点亮（放在 S.week 里），以前“永久徽章”的数据不用了
+if (saved.coins !== undefined && (saved.ver || 0) < 8) {
+  ;['badges', 'badgeRw', 'bestRun', 'run', 'figCorrect'].forEach(k => delete S[k])
+  S.ver = 8; try { localStorage.setItem(KEY, JSON.stringify(S)) } catch (e) { }
 }
 if (DEMO) S.unlockAll = true
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)) } catch (e) { } }
@@ -360,7 +365,7 @@ function ensureWeek() {
     return
   }
   if (S.week) {
-    S.weekHist.push({ id: S.week.id, done: S.week.claimed.length, chest: S.week.chest, earned: S.week.earned || 0, left: S.coins })
+    S.weekHist.push({ id: S.week.id, done: S.week.claimed.length, chest: S.week.chest, earned: S.week.earned || 0, left: S.coins, bg: (S.week.bg || []).length })
     if (S.weekHist.length > 20) S.weekHist.shift()
     S.coins = 0 // 新的一周：金币清零，每周都要重新努力
   }
@@ -380,45 +385,47 @@ const wkVal = id => Math.min((S.week.c[id] || 0), WEEK_POOL.find(t => t.id === i
 const wkDone = id => wkVal(id) >= WEEK_POOL.find(t => t.id === id).goal
 const wkReady = () => { ensureWeek(); return S.week.tasks.filter(id => wkDone(id) && !S.week.claimed.includes(id)).length }
 
-// ---------------- 成就徽章 ----------------
+// ---------------- 成就徽章：每周一全部重新点亮，奖励每周都能领 ----------------
+// 所有数都只算“这一周”的（数据都在 S.week.c 里，新的一周自动清零）
+const wc = id => (S.week && S.week.c[id]) || 0
 const bestTest = () => S.tests.reduce((m, t) => Math.max(m, t.score), -1)
 const BADGES = [
-  { id: 'first', i: '🎉', n: '出发啦', d: '第一次通过一关', ok: () => Object.values(S.stars).some(v => v > 0) },
-  { id: 'c5', i: '🔥', n: '小火苗', d: '连续答对20题（跨关也算）', ok: () => (S.bestRun || 0) >= 20 },
-  { id: 'c10', i: '⚡', n: '闪电手', d: '连续答对50题（跨关也算）', ok: () => (S.bestRun || 0) >= 50 },
-  { id: 'h20', i: '💪', n: '难题克星', d: '答对20道难题', ok: () => S.hardCorrect >= 20 },
-  { id: 's5', i: '⭐', n: '摘星星', d: '5关拿到⭐', ok: () => Object.values(S.stars).filter(v => v > 0).length >= 5 },
-  { id: 's20', i: '🏅', n: '星星达人', d: '20关拿到⭐', ok: () => Object.values(S.stars).filter(v => v > 0).length >= 20 },
-  { id: 'b1', i: '⚔️', n: '初次斩鬼', d: '打败第1只鬼', ok: () => BOSS_WINS() >= 1 },
-  { id: 'b5', i: '🛡️', n: '勇敢的剑士', d: '打败5只鬼', ok: () => BOSS_WINS() >= 5 },
-  { id: 'b9', i: '🏆', n: '打败鬼王', d: '打败全部9只鬼', ok: () => BOSS_WINS() >= 9 },
-  { id: 't90', i: '🧠', n: '聪明的薇薇', d: '小测验得90分以上', ok: () => bestTest() >= 90 },
-  { id: 't100', i: '💎', n: '无敌的薇薇', d: '小测验得100分', ok: () => bestTest() >= 100 },
-  { id: 'q100', i: '💯', n: '百题勇士', d: '累计答对100题', ok: () => S.totalCorrect >= 100 },
-  { id: 'q500', i: '🎓', n: '数学博士', d: '累计答对500题', ok: () => S.totalCorrect >= 500 },
-  { id: 'd7', i: '🗓️', n: '一周不断', d: '连续7天来练习', ok: () => S.streak >= 7 },
-  { id: 'fix10', i: '🎯', n: '错题克星', d: '消灭10道错题', ok: () => S.fixed >= 10 },
-  { id: 'pet', i: '👸', n: '樱花公主', d: '小樱升到满级', ok: () => S.maxLv >= 4 },
-  { id: 'wallet', i: '👛', n: '爸爸的钱包', d: '买到爸爸的钱包', ok: () => S.walletLog.length >= 1 },
-  { id: 'shop', i: '🛍️', n: '小小买家', d: '在商店买1样东西', ok: () => S.owned.length >= 1 },
-  { id: 'chest', i: '🎁', n: '周冠军', d: '开过1次每周宝箱', ok: () => chestCount() >= 1 },
-  { id: 'fig50', i: '🖼️', n: '看图高手', d: '累计答对50道看图题', ok: () => (S.figCorrect || 0) >= 50 },
-  { id: 'chest3', i: '👑', n: '三周冠军', d: '一共开过3次每周宝箱（不用连着）', ok: () => chestCount() >= 3 },
+  { id: 'first', i: '🎉', n: '出发啦', d: '本周第一次全对过关', g: 1, v: () => wc('star3') },
+  { id: 'c5', i: '🔥', n: '小火苗', d: '连续答对20题（跨关也算）', g: 20, v: () => wc('run') },
+  { id: 'c10', i: '⚡', n: '闪电手', d: '连续答对50题（跨关也算）', g: 50, v: () => wc('run') },
+  { id: 'h20', i: '💪', n: '难题克星', d: '本周答对20道难题', g: 20, v: () => wc('hard') },
+  { id: 's5', i: '⭐', n: '摘星星', d: '本周拿到5次⭐', g: 5, v: () => wc('star3') },
+  { id: 's15', i: '🏅', n: '星星达人', d: '本周拿到15次⭐', g: 15, v: () => wc('star3') },
+  { id: 'u5', i: '🗺️', n: '全能小学霸', d: '本周在5个不同单元拿到⭐', g: 5, v: () => wc('units3') },
+  { id: 'b1', i: '⚔️', n: '斩鬼新手', d: '本周斩鬼1次', g: 1, v: () => wc('boss') },
+  { id: 'b3', i: '🛡️', n: '勇敢的剑士', d: '本周斩鬼3次', g: 3, v: () => wc('boss') },
+  { id: 'b6', i: '🏆', n: '斩鬼大师', d: '本周斩鬼6次', g: 6, v: () => wc('boss') },
+  { id: 't90', i: '🧠', n: '聪明的薇薇', d: '本周小测验得90分以上', g: 1, v: () => wc('tbest') >= 90 ? 1 : 0 },
+  { id: 't100', i: '💎', n: '无敌的薇薇', d: '本周小测验得100分', g: 1, v: () => wc('test80') },
+  { id: 'tt', i: '🥇', n: '双百勇士', d: '本周小测验连续2次满分', g: 1, v: () => S.week && S.week.streak ? 1 : 0 },
+  { id: 'q100', i: '💯', n: '百题勇士', d: '本周答对100题', g: 100, v: () => wc('correct') },
+  { id: 'q250', i: '🎓', n: '数学博士', d: '本周答对250题', g: 250, v: () => wc('correct') },
+  { id: 'fig', i: '🖼️', n: '看图高手', d: '本周答对30道看图题', g: 30, v: () => wc('fig') },
+  { id: 'fix', i: '🎯', n: '错题克星', d: '本周消灭5道错题', g: 5, v: () => wc('mastered') },
+  { id: 'day5', i: '🌞', n: '每日之星', d: '本周领5次今日任务奖励', g: 5, v: () => wc('daily') },
+  { id: 'd7', i: '🗓️', n: '一周不断', d: '本周7天都来练习', g: 7, v: () => wc('days') },
+  { id: 'chest', i: '🎁', n: '周冠军', d: '打开本周宝箱', g: 1, v: () => S.week && S.week.chest ? 1 : 0 },
+  { id: 'wallet', i: '👛', n: '爸爸的钱包', d: '本周买到爸爸的钱包', g: 1, v: () => S.walletLog.some(x => S.week && x.week === S.week.id) ? 1 : 0 },
 ]
-function chestCount() { return (S.week && S.week.chest ? 1 : 0) + S.weekHist.filter(w => w.chest).length }
+const wBadges = () => { ensureWeek(); return S.week.bg || (S.week.bg = []) }
 function checkBadges() {
-  const got = []
-  for (const b of BADGES) if (!S.badges.includes(b.id) && b.ok()) { S.badges.push(b.id); got.push(b) }
+  const got = [], have = wBadges()
+  for (const b of BADGES) if (!have.includes(b.id) && b.v() >= b.g) { have.push(b.id); got.push(b) }
   return got
 }
-// 集徽章领奖励：集到一定数量可以领一次金币（这份金币不算进“本周赚的金币”，钱包条件不变）
+// 集徽章领奖励：本周集到一定数量可以领金币，每周都能再领（这份金币不算进“本周赚的金币”，钱包条件不变）
 const BADGE_RW = [{ n: 5, coin: 30 }, { n: 10, coin: 50 }, { n: 15, coin: 80 }, { n: 21, coin: 120 }]
-const badgeRwReady = () => BADGE_RW.filter(r => S.badges.length >= r.n && !(S.badgeRw || []).includes(r.n)).length
+const wBadgeRw = () => { ensureWeek(); return S.week.brw || (S.week.brw = []) }
+const badgeRwReady = () => BADGE_RW.filter(r => wBadges().length >= r.n && !wBadgeRw().includes(r.n)).length
 function claimBadgeRw(n) {
-  const r = BADGE_RW.find(x => x.n === n)
-  S.badgeRw = S.badgeRw || []
-  if (!r || S.badges.length < n || S.badgeRw.includes(n)) return
-  S.badgeRw.push(n); S.coins += r.coin; SFX.coin(); save(); renderWeek()
+  const r = BADGE_RW.find(x => x.n === n), rw = wBadgeRw()
+  if (!r || wBadges().length < n || rw.includes(n)) return
+  rw.push(n); S.coins += r.coin; SFX.coin(); save(); renderWeek()
   celebrate('🎖️', `集齐 ${n} 个徽章！`, `奖励 ${r.coin} 💰`)
 }
 // 拿到新徽章的庆祝特效（几个会排队播），如果够数了再提醒去领奖励
@@ -520,8 +527,8 @@ function petTap() {
 }
 function claimDaily() {
   if (S.daily.claimed || S.daily.correct < DAILY_GOAL) return
-  S.daily.claimed = true; addCoins(COIN.daily); save()
-  celebrate('🎁', '今日任务完成！', `奖励 ${COIN.daily} 💰，明天继续加油！`); renderMap()
+  S.daily.claimed = true; addCoins(COIN.daily); wk('daily'); const bg = checkBadges(); save()
+  celebrate('🎁', '今日任务完成！', `奖励 ${COIN.daily} 💰，明天继续加油！`); renderMap(); badgeFx(bg)
 }
 function tapNode(u, l) {
   if (!unlocked(u, l)) { SFX.bad(); toast('🔒 先通过前一关才能解锁哦'); return }
@@ -939,9 +946,7 @@ function submit(ok, given, el) {
   if (ok) { S.totalCorrect++; S.daily.correct++; wk('correct'); if (hard) { S.hardCorrect++; wk('hard') } }
   // 每周任务：连续答对（跨关也算，错一题从 0 开始）、答对看图题
   S.week.run = ok ? (S.week.run || 0) + 1 : 0; wk('run', S.week.run, true)
-  if (ok && (q.fig || q.type === 'clock')) { wk('fig'); S.figCorrect = (S.figCorrect || 0) + 1 }
-  // 徽章：一直连续答对（跨关也算）
-  S.run = ok ? (S.run || 0) + 1 : 0; S.bestRun = Math.max(S.bestRun || 0, S.run)
+  if (ok && (q.fig || q.type === 'clock')) wk('fig')
   // ---- 小测验：不马上告诉对错，像真正考试一样 ----
   if (G.mode === 'test') {
     G.rec.push({ q, ok, given })
@@ -1176,6 +1181,7 @@ function finishTest(why) {
   if (S.tests.length > 50) S.tests.shift()
   g.rec.forEach(r => { if (!r.ok) addWrong(r.q) })
   if (g.score >= 100) wk('test80') // 每周任务：小测验满分 1 次
+  wk('tbest', g.score, true) // 徽章：本周小测验最高分
   // 连续 2 次满分：每周奖 1 次
   let streakMsg = ''
   ensureWeek()
@@ -1264,18 +1270,21 @@ function renderWeek() {
   h += `<div class="card chest ${W.chest ? 'opened' : allClaimed ? 'ready' : ''}"><div class="ci">${W.chest ? '🎊' : '🎁'}</div><div class="info"><b>本周宝箱</b><div class="small">${W.chest ? '这周的宝箱已经打开啦！下周还有新的' : `6 个任务奖励全部领完就能打开：${CHEST_COIN}💰（${W.claimed.length}/6）`}</div></div>
     ${W.chest ? '' : `<button class="btn ${allClaimed ? 'red' : ''}" ${allClaimed ? '' : 'disabled'} onclick="openChest()">开箱</button>`}</div>`
   const last = S.weekHist[S.weekHist.length - 1]
-  if (last) h += `<div class="small" style="text-align:center;margin:-4px 0 8px">上周完成了 ${last.done}/6 个任务${last.chest ? '，打开了宝箱 🎊' : ''}</div>`
+  if (last) h += `<div class="small" style="text-align:center;margin:-4px 0 8px">上周完成了 ${last.done}/6 个任务${last.chest ? '，打开了宝箱 🎊' : ''}${last.bg !== undefined ? `，点亮了 ${last.bg} 个徽章` : ''}</div>`
   const acc = S.totalAns ? Math.round(S.totalCorrect / S.totalAns * 100) : 0, bt = bestTest()
   h += `<div class="h2">📊 我的数据</div><div class="card statrow"><div><b>${S.totalCorrect}</b><span>答对题数</span></div><div><b>${acc}%</b><span>正确率</span></div><div><b>${S.bestCombo}</b><span>最高连对</span></div>
     <div><b>${totalStars()}</b><span>星星 / 36</span></div><div><b>${BOSS_WINS()}</b><span>斩鬼 / 9</span></div><div><b>${bt >= 0 ? bt : '-'}</b><span>测验最高分</span></div></div>`
-  h += `<div class="h2">🎖️ 徽章 ${S.badges.length}/${BADGES.length}</div>`
-  const rw = S.badgeRw || []
-  h += '<div class="card wtasks"><div class="small" style="margin-bottom:4px">徽章拿到就<b>永远保留</b>，不会每周清零。集徽章领奖励（每档只能领 1 次）</div>' + BADGE_RW.map(r => {
-    const v = Math.min(S.badges.length, r.n), ok = v >= r.n, got = rw.includes(r.n)
+  const have = wBadges(), rw = wBadgeRw()
+  h += `<div class="h2">🎖️ 本周徽章 ${have.length}/${BADGES.length}</div>`
+  h += '<div class="card wtasks"><div class="small" style="margin-bottom:4px">徽章<b>每周一全部熄灭</b>，要重新点亮！本周集到下面的数量就能领金币，每周都能领。</div>' + BADGE_RW.map(r => {
+    const v = Math.min(have.length, r.n), ok = v >= r.n, got = rw.includes(r.n)
     return `<div class="wt ${got ? 'got' : ''}"><span class="wi">🎖️</span><div class="info"><b>集到 ${r.n} 个徽章</b><div class="bar"><i style="width:${v / r.n * 100}%"></i></div><span class="small">${v}/${r.n}</span></div>
       ${got ? '<span class="small">已领 ✔</span>' : `<button class="btn sm ${ok ? 'gold' : ''}" ${ok ? '' : 'disabled'} onclick="claimBadgeRw(${r.n})">${r.coin}💰</button>`}</div>`
   }).join('') + '</div><div class="grid">' +
-    BADGES.map(b => `<div class="bd ${S.badges.includes(b.id) ? '' : 'lock'}"><div class="i">${b.i}</div><div class="n">${b.n}</div><div class="d">${b.d}</div></div>`).join('') + '</div>'
+    BADGES.map(b => {
+      const lit = have.includes(b.id), v = Math.min(b.v(), b.g)
+      return `<div class="bd ${lit ? '' : 'lock'}"><div class="i">${b.i}</div><div class="n">${b.n}</div><div class="d">${b.d}</div>${!lit && b.g > 1 ? `<div class="d" style="color:#e8505b">${v}/${b.g}</div>` : ''}</div>`
+    }).join('') + '</div>'
   $app.innerHTML = h + soundLinks() + nav()
 }
 function claimWeek(id) {
@@ -1446,7 +1455,7 @@ function showHelp() {
     <p><b>🎁 每天</b>：答对 ${DAILY_GOAL} 题，领 ${COIN.daily}💰。</p>
     <p><b>📝 小测验</b>：打败了哪个单元的鬼，才能考哪个单元；打败 3 只鬼以后自己选，最少选 3 个。每天最多 ${TEST_PER_DAY} 次。<b>连续 2 次满分</b>，领 ${COIN.testStreak}💰（每周 1 次）。</p>
     <p><b>🏆 每周</b>：每周有 6 个新任务，每个 ${COIN.weekTask}💰；全做完开宝箱 ${CHEST_COIN}💰。</p>
-    <p><b>🎖️ 徽章</b>：一共 ${BADGES.length} 个，拿到就<b>永远保留</b>，不会清零。集到 ${BADGE_RW.map(r => `${r.n} 个领 ${r.coin}💰`).join('、')}（在每周挑战页下面领，每档 1 次）。</p>
+    <p><b>🎖️ 徽章</b>：一共 ${BADGES.length} 个，<b>每周一全部熄灭，要重新点亮</b>。本周集到 ${BADGE_RW.map(r => `${r.n} 个领 ${r.coin}💰`).join('、')}（在每周挑战页下面领，每周都能领）。</p>
     <p><b>👸 小樱</b>：花金币升级，最高 4 级，每升 1 级学会 1 个本领。<br>本领每种<b>每天只能用 1 次</b>，用了小樱会<b>降 1 级</b>。</p><p class="warn">⚠️ 每周的金币只够把小樱升到 4 级<b>一次</b>！掉了级再升回来，金币就<b>不够买👛爸爸的钱包</b>啦。本领要省着用！</p>
     <p><b>🛍️ 商店</b>：给小樱买头饰、公主裙、鞋子。12 样全部买齐后，才能买 <b>👛 ${WALLET.n}</b>（每周 1 次）！</p>
     <p class="hl">💡 <b>本周赚满 ${WEEK_MAX}💰</b>（每天都拿满 + 测验连续 2 次满分），12 样装扮也都买齐了，就能买下爸爸的钱包！</p></div>
