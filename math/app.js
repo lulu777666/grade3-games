@@ -14,7 +14,7 @@ const DRILL_N = 5
 
 // ============================================================
 //  金币规则（算好了的）：
-//  每周最多能赚：答题 40×7 + 今日任务 20×7 + 每周任务 40×6 + 宝箱 160 + 小测验连续3次满分 60（每周1次） = 880
+//  每周最多能赚：答题 40×7 + 今日任务 20×7 + 每周任务 40×6 + 宝箱 160 + 小测验连续2次满分 60（每周1次） = 880
 //  花销：小樱升满4级 50+60+70+80 = 260，商店全部 420，爸爸的钱包 200 → 880（刚好）。少了测验奖金只有 820，买不起钱包
 //  不做每周任务最多只有 480，连小樱升满再买完商店（680）都不够，所以每周任务一定要做
 // ============================================================
@@ -340,7 +340,7 @@ const WEEK_POOL = [
   { id: 'hard', i: '💪', n: '答对 25 道难题', goal: 25 },
   { id: 'star3', i: '⭐', n: '拿到 5 次⭐（全对过关，重玩也算）', goal: 5 },
   { id: 'boss', i: '⚔️', n: '斩鬼 1 次（打败Boss）', goal: 1 },
-  { id: 'test80', i: '📝', n: '小测验得 80 分以上', goal: 1 },
+  { id: 'test80', i: '📝', n: '小测验满分 1 次', goal: 1 },
   { id: 'days', i: '📅', n: '这周有 4 天来练习', goal: 4 },
   { id: 'mastered', i: '🎯', n: '消灭 3 道错题', goal: 3 },
   { id: 'combo', i: '🔥', n: '一关里连对 10 题', goal: 10 },
@@ -469,7 +469,7 @@ function renderMap() {
       ${d.claimed ? '<span class="small">已领取</span>' : `<button class="btn green sm" ${d.correct >= DAILY_GOAL ? '' : 'disabled'} onclick="claimDaily()">领取</button>`}</div>`
   h += `<div class="card testcard weekcard" onclick="go('week')"><div class="ic">🏆</div><div class="info"><b>本周挑战 ${done}/6</b><div class="small">每个任务 ${COIN.weekTask}💰，6 个全完成开宝箱（${CHEST_COIN}💰）${wkReady() ? `<br><b style="color:#e8505b">有 ${wkReady()} 个奖励可以领！</b>` : ''}</div></div><span class="btn sm">去看看</span></div>`
   const bt = bestTest()
-  h += `<div class="card testcard" onclick="go('test')"><div class="ic">📝</div><div class="info"><b>综合小测验</b><div class="small">${TEST_MID + TEST_HARD}题 · ${TEST_MIN}分钟 · 每天 ${TEST_PER_DAY} 次 · 连续 3 次满分奖 ${COIN.testStreak}💰${bt >= 0 ? `<br>最好成绩：${bt}分` : ''}</div></div><span class="btn sm">去测验</span></div>`
+  h += `<div class="card testcard" onclick="go('test')"><div class="ic">📝</div><div class="info"><b>综合小测验</b><div class="small">${TEST_MID + TEST_HARD}题 · ${TEST_MIN}分钟 · 每天 ${TEST_PER_DAY} 次 · 连续 2 次满分奖 ${COIN.testStreak}💰${bt >= 0 ? `<br>最好成绩：${bt}分` : ''}</div></div><span class="btn sm">去测验</span></div>`
   let firstNext = null
   UNITS.forEach((U, u) => {
     const got = [0, 1, 2, 3].reduce((a, l) => a + (S.stars[lvId(u, l)] || 0), 0)
@@ -527,7 +527,7 @@ function showEvolve(p) {
 function renderShop() {
   let h = topbar('🛍️ 商店')
   const n = ALL_ITEMS().filter(a => S.owned.includes(a.id)).length, wk0 = S.week ? S.week.id : '', boughtWk = S.walletLog.some(x => x.week === wk0)
-  h += `<div class="card shop-top"><div class="pface big">${myPrincess(110)}</div><div class="small" style="font-size:13px;line-height:1.7">💡 一周最多赚 <b>${WEEK_MAX}💰</b>（要每天都拿满，还要拿到<b>测验连续 3 次满分</b>的 ${COIN.testStreak}💰）。<br>⚠️ <b>每到新的一周，金币清零</b>，没花完的会消失！<br>⚠️ 掉级再升会多花金币，钱包就买不起啦。</div></div>`
+  h += `<div class="card shop-top"><div class="pface big">${myPrincess(110)}</div><div class="small" style="font-size:13px;line-height:1.7">💡 一周最多赚 <b>${WEEK_MAX}💰</b>（要每天都拿满，还要拿到<b>测验连续 2 次满分</b>的 ${COIN.testStreak}💰）。<br>⚠️ <b>每到新的一周，金币清零</b>，没花完的会消失！<br>⚠️ 掉级再升会多花金币，钱包就买不起啦。</div></div>`
   const sec = [['hat', '👑 头饰', 'head'], ['dress', '👗 公主裙', ''], ['shoes', '👠 鞋子', 'feet']]
   sec.forEach(([kind, title, crop]) => {
     h += `<div class="h2">${title}</div><div class="shop">` + SHOP[kind].map(a => shopItem(a, kind, princessSvg({ lv: 0, hat: S.hat, dress: S.dress, shoes: S.shoes, [kind]: a.id }, crop ? 76 : 62, crop))).join('') + '</div>'
@@ -1063,10 +1063,10 @@ function renderTestSetup() {
     · 中等题 ${TEST_MID} 道，每道 ${PT_MID} 分；难题 ${TEST_HARD} 道，每道 ${PT_HARD} 分<br>
     · 像真正考试一样：做完才公布成绩，然后可以看每道错题的讲解<br>
     · 时间到了会自动交卷<br>
-    · 每天最多测 <b>${TEST_PER_DAY} 次</b>；<b>连续 3 次满分</b>奖励 <b>${COIN.testStreak}💰</b>（每周能拿 1 次）</div></div>`
+    · 每天最多测 <b>${TEST_PER_DAY} 次</b>；<b>连续 2 次满分</b>奖励 <b>${COIN.testStreak}💰</b>（每周能拿 1 次）</div></div>`
   ensureWeek()
   const left = testLeft()
-  h += `<div class="card statrow"><div><b>${left}/${TEST_PER_DAY}</b><span>今天还能测</span></div><div><b>${S.perfStreak}/3</b><span>连续满分</span></div><div><b>${S.week.streak ? '已拿 ✔' : COIN.testStreak + '💰'}</b><span>本周满分奖金</span></div></div>`
+  h += `<div class="card statrow"><div><b>${left}/${TEST_PER_DAY}</b><span>今天还能测</span></div><div><b>${S.perfStreak}/2</b><span>连续满分</span></div><div><b>${S.week.streak ? '已拿 ✔' : COIN.testStreak + '💰'}</b><span>本周满分奖金</span></div></div>`
   const need = testNeed(), many = open.length >= 3
   const tip = !open.length ? `🔒 小测验还没开放！<br>先去地图上<b>打败至少 1 只鬼</b>，打败了哪个单元的鬼，那个单元的题才能放进测验。`
     : !many ? `⚔️ 你已经打败了 <b>${open.length}</b> 只鬼，测验会考这 ${open.length} 个单元。<br>打败 3 只鬼以后，就可以自己挑单元啦（最少选 3 个）。`
@@ -1140,17 +1140,17 @@ function finishTest(why) {
   S.tests.push({ date: `${now.getMonth() + 1}月${now.getDate()}日 ${timeStr(now)}`, score: g.score, units: g.units, used })
   if (S.tests.length > 50) S.tests.shift()
   g.rec.forEach(r => { if (!r.ok) addWrong(r.q) })
-  if (g.score >= 80) wk('test80')
-  // 连续 3 次满分：每周奖 1 次
+  if (g.score >= 100) wk('test80') // 每周任务：小测验满分 1 次
+  // 连续 2 次满分：每周奖 1 次
   let streakMsg = ''
   ensureWeek()
   if (g.score >= 100) {
     S.perfStreak++
-    if (S.perfStreak >= 3) {
+    if (S.perfStreak >= 2) {
       S.perfStreak = 0
-      if (!S.week.streak) { S.week.streak = true; addCoins(COIN.testStreak); streakMsg = `🔥 连续 3 次满分！奖励 ${COIN.testStreak}💰` }
-      else streakMsg = '🔥 又连续 3 次满分！（这周的奖金已经拿过啦，下周再来）'
-    } else streakMsg = `🔥 连续满分 ${S.perfStreak}/3，再满分 ${3 - S.perfStreak} 次有大奖！`
+      if (!S.week.streak) { S.week.streak = true; addCoins(COIN.testStreak); streakMsg = `🔥 连续 2 次满分！奖励 ${COIN.testStreak}💰` }
+      else streakMsg = '🔥 又连续 2 次满分！（这周的奖金已经拿过啦，下周再来）'
+    } else streakMsg = `🔥 连续满分 ${S.perfStreak}/2，再满分 ${2 - S.perfStreak} 次有大奖！`
   } else S.perfStreak = 0
   const badges = checkBadges(); save()
   G = null; setTheme(''); Music.play('calm')
@@ -1402,11 +1402,11 @@ function showHelp() {
     <p><b>⚔️ 斩鬼</b>：只有 <b>1 颗❤️</b>，错一题就输！赢了金币翻倍。<b>每只鬼每天只能斩 ${BOSS_PER_DAY} 次</b>（第1~3关随便玩）。</p>
     <p><b>💰 金币</b>：答对 1 题 1 个，难题 2 个。每天最多赚 ${COIN.dayCap} 个。<b>每到新的一周，金币清零！</b></p>
     <p><b>🎁 每天</b>：答对 ${DAILY_GOAL} 题，领 ${COIN.daily}💰。</p>
-    <p><b>📝 小测验</b>：打败了哪个单元的鬼，才能考哪个单元；打败 3 只鬼以后自己选，最少选 3 个。每天最多 ${TEST_PER_DAY} 次。<b>连续 3 次满分</b>，领 ${COIN.testStreak}💰（每周 1 次）。</p>
+    <p><b>📝 小测验</b>：打败了哪个单元的鬼，才能考哪个单元；打败 3 只鬼以后自己选，最少选 3 个。每天最多 ${TEST_PER_DAY} 次。<b>连续 2 次满分</b>，领 ${COIN.testStreak}💰（每周 1 次）。</p>
     <p><b>🏆 每周</b>：每周有 6 个新任务，每个 ${COIN.weekTask}💰；全做完开宝箱 ${CHEST_COIN}💰。</p>
     <p><b>👸 小樱</b>：花金币升级，最高 4 级，每升 1 级学会 1 个本领。<br>本领每种<b>每天只能用 1 次</b>，用了小樱会<b>降 1 级</b>。</p><p class="warn">⚠️ 每周的金币只够把小樱升到 4 级<b>一次</b>！掉了级再升回来，金币就<b>不够买👛爸爸的钱包</b>啦。本领要省着用！</p>
     <p><b>🛍️ 商店</b>：给小樱买头饰、公主裙、鞋子。12 样全部买齐后，才能买 <b>👛 ${WALLET.n}</b>（每周 1 次）！</p>
-    <p class="hl">💡 <b>本周赚满 ${WEEK_MAX}💰</b>（每天都拿满 + 测验连续 3 次满分），12 样装扮也都买齐了，就能买下爸爸的钱包！</p></div>
+    <p class="hl">💡 <b>本周赚满 ${WEEK_MAX}💰</b>（每天都拿满 + 测验连续 2 次满分），12 样装扮也都买齐了，就能买下爸爸的钱包！</p></div>
     <button class="btn" onclick="closeModal()">知道啦！</button>`)
 }
 
@@ -1423,7 +1423,7 @@ function demoPanel() {
     <div class="dg">🛍️ 商店和钱包</div>${B('demo.ownAll()', '买齐全部装扮')}${B('showWallet()', '看兑换券')}${B("go('shop')", '去商店')}
     <div class="dg">🏆 每周挑战</div>${B('demo.weekAll()', '完成全部周任务')}${B('demo.newWeek()', '模拟新的一周（金币清零）')}${B('demo.chest()', '看开宝箱')}
     <div class="dg">⚔️ 闯关结局</div>${B('demo.boss(true)', '斩鬼胜利')}${B('demo.boss(false)', '斩鬼失败')}${B('demo.perfect()', '满分·薇薇真棒')}${B('demo.allBoss()', '9 只鬼全打败')}${B("oniIntro(1, () => go('map'))", '👹 斩鬼开场动画')}${B("celebrate('🎁', '今日任务完成！', '奖励 20 💰')", '🎉 惊喜特效')}
-    <div class="dg">📝 小测验结局</div>${B('demo.test(100)', '100 分')}${B('demo.test(94)', '90+ 分')}${B('demo.test(70)', '60+ 分')}${B('demo.test(40)', '不及格')}${B('demo.streak()', '连续 3 次满分')}${B("thunderShow('无敌的薇薇', '⚡ 雷光一闪 · 小测验满分 100 分！')", '⚡ 雷光一闪动画')}
+    <div class="dg">📝 小测验结局</div>${B('demo.test(100)', '100 分')}${B('demo.test(94)', '90+ 分')}${B('demo.test(70)', '60+ 分')}${B('demo.test(40)', '不及格')}${B('demo.streak()', '连续 2 次满分')}${B("thunderShow('无敌的薇薇', '⚡ 雷光一闪 · 小测验满分 100 分！')", '⚡ 雷光一闪动画')}
     <div class="dg">其他</div>${B('showHelp()', '看游戏说明')}${B('demo.clear()', '清空体验存档')}
   </div><p class="small"><a class="lnk" href="./">← 回到薇薇的正常模式</a></p><button class="btn" onclick="closeModal()">关闭</button>`)
 }
@@ -1449,7 +1449,7 @@ const demo = {
     qs.forEach((q, i) => { G.rec.push({ q, ok: ok[i], given: ok[i] ? q.answer : '?' }); if (ok[i]) { G.right++; G.coins += q.diff === 'hard' ? COIN.hard : COIN.mid } })
     G.score = s; finishTest('done')
   },
-  streak() { ensureWeek(); S.week.streak = false; S.perfStreak = 2; this.test(100) },
+  streak() { ensureWeek(); S.week.streak = false; S.perfStreak = 1; this.test(100) },
   clear() { if (!confirm('清空体验存档，从头开始？')) return; localStorage.removeItem(KEY); location.reload() },
 }
 
